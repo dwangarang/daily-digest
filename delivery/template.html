@@ -28,7 +28,8 @@
   .further-reading { font-size: 13px; color: #555; font-family: -apple-system, sans-serif; }
   .further-reading strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; display: block; margin-bottom: 4px; }
   .further-reading ul { margin: 0; padding-left: 16px; }
-  .further-reading li { margin-bottom: 4px; line-height: 1.4; }
+  .further-reading li { margin-bottom: 6px; line-height: 1.4; }
+  .format-tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; background: #ececec; border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; font-family: -apple-system, sans-serif; }
   .callbacks { background: #f0f4f8; border-radius: 6px; padding: 16px 20px; margin: 32px 0; }
   .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 12px 0; font-family: -apple-system, sans-serif; }
   .callback-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #dce4ec; }
@@ -85,7 +86,9 @@
     <strong>Further reading</strong>
     <ul>
       {% for rec in item.further_reading %}
-      <li><em>{{ rec.title }}</em>{% if rec.author %} by {{ rec.author }}{% endif %} — {{ rec.reason }}</li>
+      <li>
+        <em>{{ rec.title }}</em>{% if rec.author %} by {{ rec.author }}{% endif %}{% if rec.format %}<span class="format-tag">{{ rec.format }}</span>{% endif %} — {{ rec.reason }}
+      </li>
       {% endfor %}
     </ul>
   </div>

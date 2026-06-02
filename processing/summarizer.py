@@ -12,6 +12,26 @@ import time
 from anthropic import Anthropic
 from sources.scraper import fetch_full_article
 
+# Named frameworks used as cross-domain lenses in think_about_this questions.
+# Claude picks the most apt one per article; the curator enforces max-2-same per digest.
+FRAMEWORKS = [
+    ("Musk — First Principles",      "strip analogy/convention; identify fundamental constraints, reason up from physics"),
+    ("Bezos — Regret Minimization",  "project to age 80: which choice would you regret not making? prioritize irreversibility"),
+    ("Schelling — Focal Points",     "coordination without communication: where do agents with no instructions naturally converge?"),
+    ("Munger — Inversion",           "ask what guarantees failure, then avoid it; think backwards to surface hidden risks"),
+    ("Christensen — Disruption",     "low-end or new-market entrants improve incrementally until they displace incumbents"),
+    ("Taleb — Antifragility",        "distinguish fragile/robust/antifragile; seek systems that gain from disorder"),
+    ("Coase — Theory of the Firm",   "firms exist to reduce transaction costs; boundaries set where markets are inefficient"),
+    ("Boyd — OODA Loop",             "Observe-Orient-Decide-Act; faster loops beat stronger opponents; orientation is decisive"),
+    ("Kahneman — Prospect Theory",   "losses loom twice as large as gains; reference points determine risk appetite"),
+    ("Porter — Five Forces",         "industry profitability shaped by supplier power, buyer power, substitutes, entrants, rivalry"),
+    ("Thiel — Zero to One",          "monopolies create and capture value; competition destroys it; seek secrets others deny"),
+    ("Marks — Second-Level Thinking","first level: obvious; second level: what does consensus think, and where is it wrong?"),
+    ("Dalio — Debt Cycles",          "short- and long-term debt cycles drive macro outcomes most actors underweight"),
+    ("Perez — Tech Revolutions",     "each wave: installation surge → bubble → crash → deployment synergy → maturity"),
+    ("Keynes — Beauty Contest",      "markets price what others think others think; second/third-order beliefs dominate short run"),
+]
+
 client = None
 
 
@@ -32,6 +52,7 @@ def _parse_json_response(raw_text: str) -> dict:
 
 
 def _build_article_system_prompt(interest_profile: str, topic_names: list) -> str:
+    framework_list = "\n".join(f"- {name}: {desc}" for name, desc in FRAMEWORKS)
     return f"""You are a sharp research analyst processing articles for a specific reader. Your job is not to summarize — it is to extract what's non-obvious and frame it for someone with 4 years of strategy consulting experience and an MBA focused on AI, enterprise SaaS GTM, and China-ASEAN markets.
 
 Reader profile:
@@ -39,31 +60,36 @@ Reader profile:
 
 Available topic tags: {json.dumps(topic_names)}
 
+FRAMEWORK LENSES (for cross-domain synthesis):
+{framework_list}
+
 Return a JSON object with this exact structure (no markdown fences, no other text):
 {{
     "insight": "The single non-obvious or contrarian takeaway. What would a smart person miss on first read? What's the second-order implication? Direct, opinionated voice. 2-3 sentences max.",
-    "so_what": "One sentence connecting this insight to the reader's professional context — AI strategy, enterprise SaaS GTM, or China-ASEAN markets. Should feel like a sharp colleague saying 'here's why you should care.'",
+    "so_what": "One sentence connecting this insight to the reader's professional context — AI strategy, enterprise SaaS GTM, or China-ASEAN markets.",
     "contrarian_angle": "One sentence: the strongest counterargument to the article's thesis, or the thing most readers would get wrong about it.",
     "key_takeaways": ["takeaway 1", "takeaway 2", "takeaway 3"],
     "tags": ["tag1"],
     "relevance_score": 0.75,
-    "think_about_this": "A cross-domain synthesis question. Hard requirements: (1) MUST explicitly connect this article's concept to a concept from a DIFFERENT domain — e.g. connect an AI governance paper to an investing mental model, or a GTM piece to a geopolitics dynamic; (2) must present a SPECIFIC CLAIM the reader evaluates — not 'how would you approach X' but 'claim X implies Y — do you agree?'; (3) difficulty calibrated for 4 years strategy consulting + MBA.",
+    "think_about_this": "Cross-domain synthesis question using the framework you chose. Apply that framework's specific logic to the article's concept. Make a concrete claim the reader evaluates — not 'how would you...' but 'claim X implies Y — do you agree?'. Difficulty: 4yr strategy consulting + MBA.",
+    "think_framework": "Exact name of the framework you used, copied from the FRAMEWORK LENSES list — e.g. 'Boyd — OODA Loop'",
     "further_reading": [
-        {{"title": "Specific real article, essay, book chapter, or paper title", "author": "Author name, or empty string if unknown", "reason": "One sentence on why this specific piece adds a genuinely different angle — not just 'also related to this topic'"}},
-        {{"title": "...", "author": "...", "reason": "..."}},
-        {{"title": "...", "author": "...", "reason": "..."}}
+        {{"title": "Specific title", "author": "Author name or empty string", "format": "research paper", "reason": "One sentence on the distinct angle this adds"}},
+        {{"title": "Specific title", "author": "Author or empty string", "format": "memo", "reason": "One sentence on the distinct angle"}},
+        {{"title": "Specific title", "author": "Author or empty string", "format": "essay", "reason": "One sentence on the distinct angle"}}
     ],
-    "core_concept": "The single most important idea from this article in one sentence. Used for spaced repetition — write it as a standalone insight, not a reference to the article."
+    "core_concept": "The single most important idea in one sentence. Standalone insight for spaced repetition — not a reference to the article."
 }}
 
 Rules:
-- insight: opinionated, not neutral. What a second-order thinker notices that a casual reader misses.
-- so_what: must name a specific domain the reader cares about (not generic "business" or "strategy")
+- insight: opinionated, not neutral. Second-order thinking, not first read.
+- so_what: name a specific domain the reader cares about — not generic "business"
 - contrarian_angle: steelman the opposing view or surface the common misreading
 - tags: pick 1-2 from the available topic tags only
 - relevance_score: 0.0-1.0 based on match with reader profile
-- think_about_this: must be cross-domain, must make a specific claim, must not be yes/no answerable
-- further_reading: real titles with specificity
+- think_about_this: MUST use one framework from the FRAMEWORK LENSES list as the cross-domain lens. Pick the most apt one — don't default to Marks for everything.
+- think_framework: copy the exact name string from the list — this is used to enforce digest-level framework diversity
+- further_reading: include exactly 3 recommendations — one academic/research piece, one practitioner piece (memo, blog post, interview, or talk), one long-form essay or book chapter. No two from the same author. Be specific: "Howard Marks' October 2001 memo 'You Can't Predict. You Can Prepare.'" not "a Howard Marks memo". Format values: memo | essay | research paper | talk | interview | blog post | book chapter
 - core_concept: a standalone insight, not a reference to the article"""
 
 
@@ -217,12 +243,16 @@ def process_concept(name: str, explanation: str, topic: str, config: dict) -> di
     topics = config.get("topics", [])
     topic_names = [t["name"] for t in topics]
 
+    framework_list = "\n".join(f"- {name}: {desc}" for name, desc in FRAMEWORKS)
     system_text = f"""You are a sharp research analyst helping a reader deepen their understanding of a concept they already know. Add the non-obvious angle and connect it to their professional context.
 
 Reader profile:
 {interest_profile}
 
 Available topic tags: {json.dumps(topic_names)}
+
+FRAMEWORK LENSES (for cross-domain synthesis):
+{framework_list}
 
 The reader will provide a concept name and their own explanation. Return a JSON object with this exact structure (no markdown fences, no other text):
 {{
@@ -232,14 +262,17 @@ The reader will provide a concept name and their own explanation. Return a JSON 
     "key_takeaways": ["takeaway 1", "takeaway 2", "takeaway 3"],
     "tags": ["tag from available list"],
     "relevance_score": 0.85,
-    "think_about_this": "Cross-domain synthesis question: (1) connects to a DIFFERENT domain; (2) specific claim to evaluate, not open-ended; (3) difficulty for 4yr strategy consulting + MBA.",
+    "think_about_this": "Cross-domain synthesis question using one framework from the FRAMEWORK LENSES list. Apply that framework's logic to the concept. Make a specific claim to evaluate, not open-ended. Difficulty: 4yr consulting + MBA.",
+    "think_framework": "Exact name copied from FRAMEWORK LENSES list",
     "further_reading": [
-        {{"title": "Specific real title", "author": "Author or empty string", "reason": "One sentence on the different angle this adds"}},
-        {{"title": "...", "author": "...", "reason": "..."}},
-        {{"title": "...", "author": "...", "reason": "..."}}
+        {{"title": "Specific real title", "author": "Author or empty string", "format": "research paper", "reason": "One sentence on the distinct angle"}},
+        {{"title": "Specific real title", "author": "Author or empty string", "format": "memo", "reason": "One sentence"}},
+        {{"title": "Specific real title", "author": "Author or empty string", "format": "essay", "reason": "One sentence"}}
     ],
     "core_concept": "The most precise one-sentence formulation of this concept for spaced repetition."
-}}"""
+}}
+
+Rules for further_reading: one academic/research piece, one practitioner piece (memo/blog/interview/talk), one essay or book chapter. No two from the same author. Be specific about titles."""
 
     user_text = f"Concept: {name}\n\nReader's explanation: {explanation}\n\nPrimary topic: {topic}"
 

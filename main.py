@@ -109,6 +109,7 @@ def _save_processed_article(article_id: str, result: dict):
         so_what=result.get("so_what", ""),
         contrarian_angle=result.get("contrarian_angle", ""),
         further_reading=result.get("further_reading", []),
+        think_framework=result.get("think_framework", ""),
     )
 
 
