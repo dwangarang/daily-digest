@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background: #fafafa; }
+  .header { border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; margin: 0 0 4px 0; letter-spacing: -0.5px; }
+  .header .date { font-size: 13px; color: #666; font-family: -apple-system, sans-serif; }
+  .theme-box { background: #f0f0f0; border-left: 3px solid #333; padding: 12px 16px; margin-bottom: 28px; font-style: italic; font-size: 15px; }
+  .item { margin-bottom: 32px; }
+  .item-number { font-family: -apple-system, sans-serif; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .item h2 { font-size: 18px; margin: 0 0 4px 0; }
+  .item h2 a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #ccc; }
+  .item h2 a:hover { border-color: #1a1a1a; }
+  .item .source { font-size: 12px; color: #888; font-family: -apple-system, sans-serif; margin-bottom: 8px; }
+  .item .summary { font-size: 15px; margin-bottom: 10px; }
+  .item .think { background: #f8f5e6; padding: 10px 14px; border-radius: 4px; font-size: 14px; margin-bottom: 10px; }
+  .item .think strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a7a3a; }
+  .item .further-reading { font-size: 13px; color: #555; font-family: -apple-system, sans-serif; }
+  .item .further-reading a { color: #555; }
+  .callbacks { background: #f0f4f8; border-radius: 6px; padding: 16px 20px; margin: 32px 0; }
+  .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 12px 0; font-family: -apple-system, sans-serif; }
+  .callback-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #dce4ec; }
+  .callback-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .callback-item .question { font-size: 15px; font-style: italic; margin-bottom: 4px; }
+  .callback-item .context { font-size: 12px; color: #6a8aaa; font-family: -apple-system, sans-serif; }
+  .feedback { text-align: center; margin: 28px 0; padding: 16px; border-top: 1px solid #e0e0e0; }
+  .feedback .label { font-size: 12px; color: #999; font-family: -apple-system, sans-serif; margin-bottom: 8px; }
+  .feedback a { display: inline-block; padding: 6px 16px; margin: 0 6px; font-size: 13px; text-decoration: none; border: 1px solid #ccc; border-radius: 4px; color: #555; font-family: -apple-system, sans-serif; }
+  .footer { font-size: 12px; color: #999; text-align: center; margin-top: 32px; padding-top: 16px; border-top: 1px solid #eee; font-family: -apple-system, sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧠 Daily Digest</h1>
+  <div class="date">{{ date }} · {{ item_count }} items · {{ theme }}</div>
+</div>
+
+<div class="theme-box">
+  {{ theme_description }}
+</div>
+
+{% for item in items %}
+<div class="item">
+  <div class="item-number">Item {{ loop.index }} of {{ items|length }}</div>
+  <h2><a href="{{ item.url }}">{{ item.title }}</a></h2>
+  <div class="source">{{ item.source_name }}{% if item.tags %} · {{ item.tags | join(', ') }}{% endif %}</div>
+  <div class="summary">{{ item.summary }}</div>
+  <div class="think">
+    <strong>Think about this</strong><br>
+    {{ item.think_about_this }}
+  </div>
+  {% if item.related_search_terms %}
+  <div class="further-reading">
+    Dive deeper: 
+    {% for term in item.related_search_terms %}
+      <a href="https://www.google.com/search?q={{ term | urlencode }}">{{ term }}</a>{% if not loop.last %} · {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if callbacks %}
+<div class="callbacks">
+  <h3>🔄 Recall Check</h3>
+  {% for cb in callbacks %}
+  <div class="callback-item">
+    <div class="question">{{ cb.question }}</div>
+    <div class="context">From "{{ cb.article_title }}" · Review #{{ cb.difficulty_level + 1 }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="feedback">
+  <div class="label">Reply to this email with feedback</div>
+  <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest {{ date }}&body=save item [number]">📌 Save</a>
+  <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest {{ date }}&body=more like this">👍 More</a>
+  <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest {{ date }}&body=less of this">👎 Less</a>
+</div>
+
+<div class="footer">
+  Daily Digest · Reply with "add [url]" to queue an article · Reply with "less [topic]" to adjust topics
+</div>
+
+</body>
+</html>

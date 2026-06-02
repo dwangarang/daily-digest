@@ -1,0 +1,117 @@
+# ============================================================
+# Daily Digest - Configuration
+# ============================================================
+# Copy this file to config.yaml and customize:
+#   cp config.example.yaml config.yaml
+# ============================================================
+
+# --- Schedule ---
+schedule:
+  frequency: "daily"          # "daily" or "every_other_day"
+  send_time: "07:00"          # 24h format, your local time
+  timezone: "Europe/Paris"    # Your timezone (IANA format)
+  items_per_digest: 4         # 3-5 recommended
+
+# --- Topics ---
+# Weights control how much of each digest is allocated to this topic.
+# Weights should sum to roughly 1.0 but don't need to be exact.
+topics:
+  - name: "AI & Machine Learning"
+    weight: 0.30
+    description: "AI research, LLM developments, AI infrastructure, applied AI"
+  - name: "GTM & Product Strategy"
+    weight: 0.25
+    description: "Go-to-market, product management, SaaS growth, sales strategy"
+  - name: "Investing & Mental Models"
+    weight: 0.20
+    description: "Investment frameworks, second-level thinking, risk assessment"
+  - name: "China-Tech & Geopolitics"
+    weight: 0.15
+    description: "China tech ecosystem, US-China dynamics, ASEAN markets"
+  - name: "General Interest"
+    weight: 0.10
+    description: "Science, history, philosophy, culture, anything surprising"
+
+# --- Content Sources ---
+# Types: "rss", "api", "scrape", "evergreen"
+#
+# RSS:    url is the RSS/Atom feed URL
+# API:    currently supports "hackernews" and "reddit"
+# Scrape: url is the page to scrape (basic article extraction)
+# Evergreen: url points to a page listing essays/articles (scraped once, then
+#            individual pieces are served over time)
+
+sources:
+  # --- Live feeds (checked daily) ---
+  - name: "Lenny's Newsletter"
+    type: "rss"
+    url: "https://www.lennysnewsletter.com/feed"
+    topics: ["GTM & Product Strategy"]
+
+  - name: "Paul Graham Essays"
+    type: "evergreen"
+    url: "https://paulgraham.com/articles.html"
+    topics: ["General Interest", "Investing & Mental Models"]
+
+  - name: "Stratechery"
+    type: "rss"
+    url: "https://stratechery.com/feed/"
+    topics: ["AI & Machine Learning", "GTM & Product Strategy"]
+
+  - name: "Hacker News (Top Stories)"
+    type: "api"
+    api_name: "hackernews"
+    max_items: 10
+    topics: ["AI & Machine Learning", "General Interest"]
+
+  - name: "AI Research (arXiv)"
+    type: "rss"
+    url: "https://rss.arxiv.org/rss/cs.AI"
+    topics: ["AI & Machine Learning"]
+    max_items: 5
+
+  # --- Add your own sources below ---
+  # - name: "Howard Marks Memos"
+  #   type: "evergreen"
+  #   url: "https://www.oaktreecapital.com/insights/memo-archive"
+  #   topics: ["Investing & Mental Models"]
+
+  # - name: "Specific Subreddit"
+  #   type: "api"
+  #   api_name: "reddit"
+  #   subreddit: "MachineLearning"
+  #   max_items: 5
+  #   topics: ["AI & Machine Learning"]
+
+# --- Interest Profile ---
+# Used by the LLM to score relevance. Write this as if you're describing
+# yourself to a research assistant who's curating reading for you.
+interest_profile: |
+  I'm an MBA candidate with a strategy consulting background, focused on
+  the intersection of AI, enterprise SaaS, and China-ASEAN markets. I care
+  about frameworks and mental models more than news. I value:
+  - First-principles reasoning and contrarian thinking
+  - Practical GTM and product strategy (not theory)
+  - AI developments that affect business strategy (not pure research)
+  - Investment frameworks from practitioners (Marks, Munger, Graham)
+  - Cross-cultural business dynamics, especially China-West
+  I don't care about: crypto, web3, celebrity tech news, or hype cycles.
+
+# --- Spaced Repetition ---
+repetition:
+  enabled: true
+  # Intervals in days between reviews of the same concept
+  intervals: [1, 3, 7, 14, 30, 60]
+  # Number of callback questions per digest
+  callbacks_per_digest: 2
+
+# --- Feedback ---
+feedback:
+  # How often to check for email replies (minutes)
+  check_interval: 30
+  # Keywords the reply parser recognizes
+  commands:
+    save: ["save", "bookmark", "later", "come back"]
+    positive: ["more", "like this", "great", "good", "👍"]
+    negative: ["less", "skip", "boring", "👎"]
+    add_url: ["add", "queue", "read this"]

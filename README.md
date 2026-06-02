@@ -1,0 +1,204 @@
+# 🧠 Daily Digest
+
+A personal learning digest that curates, summarizes, and reinforces a stream of ideas and frameworks — delivered to your inbox every morning.
+
+**What it does:** Pulls content from RSS feeds, APIs, and web pages → summarizes each piece via Claude → selects 3-5 thematically connected items → sends a formatted email with "think about this" questions and spaced repetition callbacks from previous digests.
+
+**What it replaces:** Anki, manual newsletter triage, and the guilt of 47 unread tabs.
+
+## Features
+
+- **Thematic curation** — each digest has a connecting thread, not random items
+- **Spaced repetition** — callback questions from past digests, with increasing difficulty
+- **Reply-to-interact** — save items, adjust topics, or add URLs by replying to the email
+- **Topic balancing** — prevents any one topic from dominating across days
+- **Evergreen library** — load entire essay collections (Paul Graham, Howard Marks) and serve them over time
+
+## Quick Start (15-20 minutes)
+
+### Prerequisites
+
+- **Python 3.10+** — check with `python3 --version`
+- **An Anthropic API key** — get one at [console.anthropic.com](https://console.anthropic.com/settings/keys)
+- **A Gmail account for the bot** — create a new one (e.g., `mydigest.bot@gmail.com`)
+
+### Step 1: Clone and install
+
+```bash
+git clone https://github.com/YOUR_USERNAME/daily-digest.git
+cd daily-digest
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Step 2: Set up Gmail App Password
+
+The bot sends email from (and reads replies to) a dedicated Gmail account. You need an "App Password" because Gmail blocks regular password login from scripts.
+
+1. Log into your bot Gmail account
+2. Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+3. Enable **2-Step Verification** (required before you can create app passwords)
+4. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+5. Select **Mail** as the app, name it "Daily Digest"
+6. Copy the 16-character password (remove spaces)
+
+### Step 3: Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` in any text editor and fill in:
+
+```
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+GMAIL_ADDRESS=your-digest-bot@gmail.com
+GMAIL_APP_PASSWORD=your16charpassword
+RECIPIENT_EMAIL=your-personal-email@example.com
+```
+
+### Step 4: Configure your digest
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+Open `config.yaml` and customize:
+
+- **Topics and weights** — what categories of content you want, and how much of each
+- **Sources** — RSS feeds, APIs, and websites to pull from
+- **Interest profile** — a paragraph describing what you care about (used by Claude for relevance scoring)
+- **Schedule** — how many items per digest, your timezone
+
+### Step 5: Test it
+
+```bash
+# Dry run: fetches content, processes it, generates email, but doesn't send
+python main.py test
+```
+
+This creates a preview HTML file at `data/preview.html`. Open it in your browser to see what the digest looks like.
+
+### Step 6: Send your first real digest
+
+```bash
+python main.py digest
+```
+
+### Step 7: Schedule daily runs (Mac)
+
+Create a cron job that runs the digest every morning:
+
+```bash
+crontab -e
+```
+
+Add this line (adjust the time — this runs at 7:00 AM):
+
+```
+0 7 * * * cd /path/to/daily-digest && /path/to/daily-digest/venv/bin/python main.py digest >> /path/to/daily-digest/data/cron.log 2>&1
+```
+
+To find your exact paths, run:
+
+```bash
+echo "cd $(pwd) && $(pwd)/venv/bin/python main.py digest"
+```
+
+## Usage
+
+### Run modes
+
+| Command | What it does |
+|---------|-------------|
+| `python main.py digest` | Full pipeline: ingest → process → curate → send |
+| `python main.py ingest` | Only fetch new content from sources |
+| `python main.py process` | Only process unprocessed articles through Claude |
+| `python main.py test` | Full pipeline but saves email to file instead of sending |
+| `python main.py replies` | Only check inbox for feedback replies |
+
+### Replying to digests
+
+Reply to any digest email with:
+
+| Command | Example | Effect |
+|---------|---------|--------|
+| Save an item | `save item 2` | Re-surfaces item 2 in a future digest |
+| Positive signal | `more like this` or `👍` | Boosts similar content |
+| Negative signal | `less of this` or `👎` | Reduces similar content |
+| Topic adjustment | `less crypto` or `more GTM` | Adjusts topic weights |
+| Add a URL | `add https://example.com/article` | Queues the URL for a future digest |
+
+### Adding sources
+
+Edit `config.yaml` and add entries under `sources`:
+
+```yaml
+# RSS feed
+- name: "Benedict Evans"
+  type: "rss"
+  url: "https://www.ben-evans.com/benedictevans?format=rss"
+  topics: ["AI & Machine Learning", "GTM & Product Strategy"]
+
+# Hacker News
+- name: "Hacker News"
+  type: "api"
+  api_name: "hackernews"
+  max_items: 10
+  topics: ["AI & Machine Learning", "General Interest"]
+
+# A single web page
+- name: "Interesting Article"
+  type: "scrape"
+  url: "https://example.com/some-article"
+  topics: ["General Interest"]
+
+# An essay collection (served one at a time over days)
+- name: "Paul Graham Essays"
+  type: "evergreen"
+  url: "https://paulgraham.com/articles.html"
+  topics: ["General Interest", "Investing & Mental Models"]
+```
+
+## Project Structure
+
+```
+daily-digest/
+├── .env                  ← Your secrets (never committed)
+├── config.yaml           ← Your preferences (never committed)
+├── main.py               ← Orchestrator: runs the pipeline
+├── sources/              ← Content fetching
+│   ├── rss.py            ← RSS/Atom feed reader
+│   ├── api.py            ← Hacker News, Reddit APIs
+│   └── scraper.py        ← Web scraping + evergreen libraries
+├── processing/           ← LLM-powered analysis
+│   ├── summarizer.py     ← Summarize, tag, score via Claude
+│   ├── curator.py        ← Select thematically connected items
+│   └── repetition.py     ← Spaced repetition scheduling
+├── delivery/             ← Email output
+│   ├── template.html     ← Email layout (Jinja2)
+│   ├── sender.py         ← Gmail SMTP sending
+│   └── reply_parser.py   ← Parse feedback from email replies
+└── data/                 ← Local state (never committed)
+    ├── db.py             ← Database schema and helpers
+    └── digest.db         ← SQLite database (auto-created)
+```
+
+## Costs
+
+- **Claude API:** ~$0.10-0.30/day depending on article count (Sonnet is cost-efficient)
+- **Gmail:** Free
+- **Hosting (if not on Mac):** ~$4-5/month for a basic VPS
+
+## Security
+
+- All secrets stored in `.env` (gitignored)
+- Personal config stored in `config.yaml` (gitignored)
+- Database stored in `data/` (gitignored)
+- Pre-commit hook scans for accidentally committed secrets (gitleaks)
+- To set up secret scanning: `pip install pre-commit && pre-commit install`
+
+## License
+
+MIT
