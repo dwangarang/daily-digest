@@ -2,7 +2,7 @@
 Database layer for Daily Digest.
 
 Uses SQLite to track all state: ingested articles, sent digests,
-spaced repetition schedule, user feedback, and manual queue.
+spaced repetition schedule, user feedback, manual URL queue, and concept queue.
 """
 
 import sqlite3
@@ -14,16 +14,14 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "dige
 
 
 def get_connection():
-    """Get a database connection, creating the DB if it doesn't exist."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Access columns by name
-    conn.execute("PRAGMA journal_mode=WAL")  # Better concurrent access
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
 def init_db():
-    """Create all tables if they don't exist."""
     conn = get_connection()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS articles (
@@ -33,12 +31,16 @@ def init_db():
             url TEXT,
             raw_content TEXT,
             summary TEXT,
-            key_takeaways TEXT,           -- JSON array of strings
-            tags TEXT,                    -- JSON array of topic strings
+            key_takeaways TEXT,
+            tags TEXT,
             relevance_score REAL DEFAULT 0.0,
             think_about_this TEXT,
             core_concept TEXT,
-            related_search_terms TEXT,    -- JSON array of strings
+            related_search_terms TEXT,
+            insight TEXT,
+            so_what TEXT,
+            contrarian_angle TEXT,
+            further_reading TEXT,
             ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed_at TIMESTAMP
         );
@@ -48,13 +50,13 @@ def init_db():
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             theme TEXT,
             theme_description TEXT,
-            article_ids TEXT          -- JSON array of article IDs
+            article_ids TEXT
         );
 
         CREATE TABLE IF NOT EXISTS digest_articles (
             digest_id INTEGER,
             article_id TEXT,
-            position INTEGER,         -- Order in the email (1, 2, 3...)
+            position INTEGER,
             FOREIGN KEY (digest_id) REFERENCES digests(id),
             FOREIGN KEY (article_id) REFERENCES articles(id),
             PRIMARY KEY (digest_id, article_id)
@@ -63,8 +65,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS repetitions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article_id TEXT NOT NULL,
-            concept TEXT NOT NULL,     -- The idea being reinforced
-            question TEXT NOT NULL,    -- The callback question
+            concept TEXT NOT NULL,
+            question TEXT NOT NULL,
             difficulty_level INTEGER DEFAULT 1,
             next_review_date DATE NOT NULL,
             last_reviewed_date DATE,
@@ -75,7 +77,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article_id TEXT,
-            signal TEXT NOT NULL,      -- 'positive', 'negative', 'save', 'topic_adjust'
+            signal TEXT NOT NULL,
             details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (article_id) REFERENCES articles(id)
@@ -90,16 +92,31 @@ def init_db():
         CREATE TABLE IF NOT EXISTS manual_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT NOT NULL,
-            note TEXT,                 -- Optional note from the user
+            note TEXT,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed BOOLEAN DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS concept_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            explanation TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            source TEXT,
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed BOOLEAN DEFAULT 0
         );
     """)
+
     # Migrations: add new columns to existing databases
     for col, definition in [
         ("think_about_this", "TEXT"),
         ("core_concept", "TEXT"),
         ("related_search_terms", "TEXT"),
+        ("insight", "TEXT"),
+        ("so_what", "TEXT"),
+        ("contrarian_angle", "TEXT"),
+        ("further_reading", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE articles ADD COLUMN {col} {definition}")
@@ -139,12 +156,16 @@ def save_article(article: dict):
 def update_article_processing(article_id: str, summary: str, takeaways: list,
                                tags: list, relevance_score: float,
                                think_about_this: str = "", core_concept: str = "",
-                               related_search_terms: list = None):
+                               related_search_terms: list = None,
+                               insight: str = "", so_what: str = "",
+                               contrarian_angle: str = "",
+                               further_reading: list = None):
     conn = get_connection()
     conn.execute("""
         UPDATE articles
         SET summary = ?, key_takeaways = ?, tags = ?, relevance_score = ?,
             think_about_this = ?, core_concept = ?, related_search_terms = ?,
+            insight = ?, so_what = ?, contrarian_angle = ?, further_reading = ?,
             processed_at = ?
         WHERE id = ?
     """, (
@@ -155,6 +176,10 @@ def update_article_processing(article_id: str, summary: str, takeaways: list,
         think_about_this,
         core_concept,
         json.dumps(related_search_terms or []),
+        insight,
+        so_what,
+        contrarian_angle,
+        json.dumps(further_reading or []),
         datetime.now().isoformat(),
         article_id
     ))
@@ -163,7 +188,6 @@ def update_article_processing(article_id: str, summary: str, takeaways: list,
 
 
 def get_unsent_articles(limit: int = 50) -> list:
-    """Get processed articles that haven't been included in any digest."""
     conn = get_connection()
     rows = conn.execute("""
         SELECT a.* FROM articles a
@@ -208,7 +232,6 @@ def save_digest(theme: str, theme_description: str, article_ids: list) -> int:
 
 
 def get_recent_digest_topics(days: int = 7) -> list:
-    """Get tags from recent digests to avoid repetition."""
     conn = get_connection()
     rows = conn.execute("""
         SELECT a.tags FROM articles a
@@ -222,6 +245,19 @@ def get_recent_digest_topics(days: int = 7) -> list:
         if r["tags"]:
             all_tags.extend(json.loads(r["tags"]))
     return all_tags
+
+
+def get_most_recent_digest_articles() -> list:
+    """Return [(position, article_id), ...] for the most recently sent digest."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT da.position, da.article_id FROM digest_articles da
+        JOIN digests d ON da.digest_id = d.id
+        WHERE d.id = (SELECT id FROM digests ORDER BY sent_at DESC LIMIT 1)
+        ORDER BY da.position
+    """).fetchall()
+    conn.close()
+    return [(r["position"], r["article_id"]) for r in rows]
 
 
 # ---- Repetition helpers ----
@@ -253,7 +289,6 @@ def get_due_repetitions(as_of: date = None, limit: int = 3) -> list:
 
 
 def advance_repetition(repetition_id: int, intervals: list):
-    """Move a repetition to its next interval."""
     conn = get_connection()
     row = conn.execute(
         "SELECT review_count FROM repetitions WHERE id = ?", (repetition_id,)
@@ -287,7 +322,6 @@ def save_feedback(article_id: str, signal: str, details: str = None):
 
 
 def get_recent_feedback(days: int = 14) -> list:
-    """Get recent user feedback signals for use in curation."""
     conn = get_connection()
     rows = conn.execute("""
         SELECT signal, details, created_at FROM feedback
@@ -299,23 +333,20 @@ def get_recent_feedback(days: int = 14) -> list:
     return [dict(r) for r in rows]
 
 
-# ---- Manual queue helpers ----
+# ---- Manual URL queue helpers ----
 
 def add_to_manual_queue(url: str, note: str = None):
     conn = get_connection()
-    conn.execute("""
-        INSERT INTO manual_queue (url, note) VALUES (?, ?)
-    """, (url, note))
+    conn.execute("INSERT INTO manual_queue (url, note) VALUES (?, ?)", (url, note))
     conn.commit()
     conn.close()
 
 
 def get_pending_manual_items() -> list:
     conn = get_connection()
-    rows = conn.execute("""
-        SELECT * FROM manual_queue WHERE processed = 0
-        ORDER BY added_at ASC
-    """).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM manual_queue WHERE processed = 0 ORDER BY added_at ASC"
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -323,5 +354,33 @@ def get_pending_manual_items() -> list:
 def mark_manual_processed(item_id: int):
     conn = get_connection()
     conn.execute("UPDATE manual_queue SET processed = 1 WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+
+
+# ---- Concept queue helpers ----
+
+def add_to_concept_queue(name: str, explanation: str, topic: str, source: str = None):
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO concept_queue (name, explanation, topic, source)
+        VALUES (?, ?, ?, ?)
+    """, (name, explanation, topic, source))
+    conn.commit()
+    conn.close()
+
+
+def get_pending_concepts() -> list:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM concept_queue WHERE processed = 0 ORDER BY added_at ASC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def mark_concept_processed(item_id: int):
+    conn = get_connection()
+    conn.execute("UPDATE concept_queue SET processed = 1 WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()

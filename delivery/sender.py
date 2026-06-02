@@ -12,51 +12,41 @@ from email.mime.multipart import MIMEMultipart
 from datetime import date
 from jinja2 import Environment, FileSystemLoader
 
-
-# Template directory
 TEMPLATE_DIR = os.path.dirname(__file__)
 
 
+def _parse_json_field(value, fallback=None):
+    if fallback is None:
+        fallback = []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return fallback
+    return fallback
+
+
 def render_email(digest: dict, callbacks: list, config: dict) -> str:
-    """
-    Render the digest email from template + data.
-
-    Args:
-        digest: dict with theme, theme_description, articles
-        callbacks: list of callback question dicts
-        config: full config dict
-
-    Returns:
-        Rendered HTML string
-    """
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template("template.html")
 
-    # Prepare items with parsed JSON fields
     items = []
     for article in digest["articles"]:
-        tags = article.get("tags", "[]")
-        if isinstance(tags, str):
-            try:
-                tags = json.loads(tags)
-            except json.JSONDecodeError:
-                tags = []
-
-        related = article.get("related_search_terms", [])
-        if isinstance(related, str):
-            try:
-                related = json.loads(related)
-            except json.JSONDecodeError:
-                related = []
+        tags = _parse_json_field(article.get("tags"))
+        further_reading = _parse_json_field(article.get("further_reading"))
 
         items.append({
             "title": article.get("title", "Untitled"),
             "url": article.get("url", "#"),
             "source_name": article.get("source_name", ""),
-            "summary": article.get("summary", ""),
+            "insight": article.get("insight") or article.get("summary", ""),
+            "so_what": article.get("so_what", ""),
+            "contrarian_angle": article.get("contrarian_angle", ""),
             "tags": tags,
             "think_about_this": article.get("think_about_this", ""),
-            "related_search_terms": related,
+            "further_reading": further_reading,
         })
 
     html = template.render(
@@ -73,7 +63,6 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
 
 
 def send_email(html: str, digest: dict):
-    """Send the rendered digest email via Gmail SMTP."""
     gmail_addr = os.environ["GMAIL_ADDRESS"]
     gmail_pass = os.environ["GMAIL_APP_PASSWORD"]
     recipient = os.environ["RECIPIENT_EMAIL"]
@@ -87,13 +76,11 @@ def send_email(html: str, digest: dict):
     msg["From"] = f"Daily Digest <{gmail_addr}>"
     msg["To"] = recipient
 
-    # Plain text fallback
     plain_text = f"Daily Digest — {theme}\n\n"
     for a in digest.get("articles", []):
-        plain_text += f"• {a.get('title', '')}\n  {a.get('summary', '')}\n  {a.get('url', '')}\n\n"
+        insight = a.get("insight") or a.get("summary", "")
+        plain_text += f"• {a.get('title', '')}\n  {insight}\n  {a.get('url', '')}\n\n"
     msg.attach(MIMEText(plain_text, "plain"))
-
-    # HTML version
     msg.attach(MIMEText(html, "html"))
 
     try:

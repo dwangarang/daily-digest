@@ -55,7 +55,7 @@ def curate_digest(config: dict) -> dict | None:
             "id": a["id"],
             "title": a["title"],
             "source": a["source_name"],
-            "summary": a.get("summary", ""),
+            "insight": a.get("insight") or a.get("summary", ""),
             "tags": tags,
             "relevance_score": a.get("relevance_score", 0),
         })

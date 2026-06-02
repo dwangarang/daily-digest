@@ -2,13 +2,12 @@
 Daily Digest — main orchestrator.
 
 Run modes:
-  python main.py digest    → Run the full pipeline: ingest, process, curate, send
-  python main.py ingest    → Only fetch new content from sources
-  python main.py process   → Only process unprocessed articles through Claude
-  python main.py replies   → Only check inbox for replies/feedback
-  python main.py test      → Run a dry-run: ingest + process + curate, print but don't send
-
-Each mode can be run independently, which is useful for debugging.
+  python main.py digest       → Full pipeline: ingest, process, curate, send
+  python main.py ingest       → Only fetch new content from sources
+  python main.py process      → Only process unprocessed articles through Claude
+  python main.py replies      → Only check inbox for replies/feedback
+  python main.py test         → Dry-run: ingest + process + curate, preview only
+  python main.py add-concept  → Interactively add a concept to the digest pool
 """
 
 import os
@@ -17,20 +16,21 @@ import json
 import yaml
 import hashlib
 from pathlib import Path
+from datetime import datetime
 from dotenv import load_dotenv
 
-# Load environment variables from .env
 load_dotenv(Path(__file__).parent / ".env")
 
 from data.db import (
     init_db, article_exists, save_article, update_article_processing,
     get_unprocessed_articles, save_digest,
-    get_pending_manual_items, mark_manual_processed
+    get_pending_manual_items, mark_manual_processed,
+    get_pending_concepts, mark_concept_processed,
 )
 from sources.rss import fetch_rss_source
 from sources.api import fetch_api_source
 from sources.scraper import fetch_scrape_source, fetch_evergreen_source, fetch_full_article
-from processing.summarizer import process_article
+from processing.summarizer import process_article, process_concept
 from processing.curator import curate_digest
 from processing.repetition import (
     create_repetitions_for_digest, get_callback_questions, mark_callbacks_shown
@@ -40,13 +40,31 @@ from delivery.reply_parser import check_replies
 
 
 def load_config() -> dict:
-    """Load config.yaml."""
     config_path = Path(__file__).parent / "config.yaml"
     if not config_path.exists():
         print("[!] config.yaml not found. Copy config.example.yaml to config.yaml first.")
         sys.exit(1)
     with open(config_path) as f:
         return yaml.safe_load(f)
+
+
+def _save_processed_article(article_id: str, result: dict):
+    """Persist all Claude-generated fields for an article."""
+    insight = result.get("insight", "")
+    update_article_processing(
+        article_id=article_id,
+        summary=insight,          # keep summary in sync for backwards compat
+        takeaways=result.get("key_takeaways", []),
+        tags=result.get("tags", []),
+        relevance_score=result.get("relevance_score", 0.0),
+        think_about_this=result.get("think_about_this", ""),
+        core_concept=result.get("core_concept", ""),
+        related_search_terms=[],
+        insight=insight,
+        so_what=result.get("so_what", ""),
+        contrarian_angle=result.get("contrarian_angle", ""),
+        further_reading=result.get("further_reading", []),
+    )
 
 
 # ---- Pipeline stages ----
@@ -77,7 +95,7 @@ def stage_ingest(config: dict) -> int:
                 save_article(article)
                 new_count += 1
 
-        print(f"    Found {len(articles)} items, {new_count} new")
+        print(f"    Found {len(articles)} items, {new_count} new so far")
 
     # Process any URLs queued via email replies
     manual_items = get_pending_manual_items()
@@ -101,6 +119,41 @@ def stage_ingest(config: dict) -> int:
                 new_count += 1
         mark_manual_processed(item["id"])
 
+    # Process concepts queued via email replies
+    concept_items = get_pending_concepts()
+    if concept_items:
+        print(f"  Processing {len(concept_items)} queued concept(s)...")
+    for item in concept_items:
+        print(f"    Processing concept: {item['name']}")
+        result = process_concept(item["name"], item["explanation"], item["topic"], config)
+        if result:
+            article_id = hashlib.sha256(
+                f"concept:{item['name']}:{item['added_at']}".encode()
+            ).hexdigest()[:16]
+            source_label = f"[Manual] {item['source']}" if item.get("source") else "[Manual Concept]"
+            article = {
+                "id": article_id,
+                "source_name": source_label,
+                "title": item["name"],
+                "url": "",
+                "raw_content": item["explanation"],
+            }
+            if not article_exists(article_id):
+                save_article(article)
+                _save_processed_article(article_id, result)
+                article_for_rep = {
+                    "id": article_id,
+                    "title": item["name"],
+                    "url": "",
+                    "summary": result.get("insight", ""),
+                    "key_takeaways": result.get("key_takeaways", []),
+                    "think_about_this": result.get("think_about_this", ""),
+                    "core_concept": result.get("core_concept", item["name"]),
+                }
+                create_repetitions_for_digest([article_for_rep], config)
+                new_count += 1
+        mark_concept_processed(item["id"])
+
     return new_count
 
 
@@ -120,27 +173,13 @@ def stage_process(config: dict) -> int:
         result = process_article(article, config)
 
         if result:
-            update_article_processing(
-                article_id=article["id"],
-                summary=result.get("summary", ""),
-                takeaways=result.get("key_takeaways", []),
-                tags=result.get("tags", []),
-                relevance_score=result.get("relevance_score", 0.0),
-                think_about_this=result.get("think_about_this", ""),
-                core_concept=result.get("core_concept", ""),
-                related_search_terms=result.get("related_search_terms", []),
-            )
-            # Store extra fields in the article dict for later use
-            # (these are passed through to the curator and template)
+            _save_processed_article(article["id"], result)
             processed += 1
         else:
-            # Mark as processed with low score so we don't retry forever
             update_article_processing(
                 article_id=article["id"],
                 summary="[Processing failed]",
-                takeaways=[],
-                tags=[],
-                relevance_score=0.0,
+                takeaways=[], tags=[], relevance_score=0.0,
             )
 
     return processed
@@ -149,13 +188,11 @@ def stage_process(config: dict) -> int:
 def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
     """Curate a digest and send it. Returns True if sent successfully."""
 
-    # 1. Check for replies/feedback first
     print("  Checking for email replies...")
     actions = check_replies(config)
     if actions:
         print(f"  Processed {len(actions)} reply actions")
 
-    # 2. Curate today's digest
     print("  Curating today's digest...")
     digest = curate_digest(config)
     if not digest:
@@ -165,42 +202,25 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
     print(f"  Theme: {digest['theme']}")
     print(f"  Articles: {[a['title'][:40] for a in digest['articles']]}")
 
-    # 3. Get callback questions for spaced repetition
     callbacks = get_callback_questions(config)
     print(f"  Callbacks: {len(callbacks)} due for review")
 
-    # 4. Enrich articles with processed fields from the database
-    # The curator returns raw DB rows; we need to add the LLM-generated fields
+    # Parse stored JSON fields on each article
     for article in digest["articles"]:
-        # Parse stored JSON fields
-        if isinstance(article.get("key_takeaways"), str):
-            try:
-                article["key_takeaways"] = json.loads(article["key_takeaways"])
-            except (json.JSONDecodeError, TypeError):
-                article["key_takeaways"] = []
-
-        if isinstance(article.get("tags"), str):
-            try:
-                article["tags"] = json.loads(article["tags"])
-            except (json.JSONDecodeError, TypeError):
-                article["tags"] = []
+        for field in ("key_takeaways", "tags", "further_reading"):
+            if isinstance(article.get(field), str):
+                try:
+                    article[field] = json.loads(article[field])
+                except (json.JSONDecodeError, TypeError):
+                    article[field] = []
 
         if not article.get("think_about_this"):
             article["think_about_this"] = ""
-        if not article.get("related_search_terms"):
-            article["related_search_terms"] = digest.get("further_reading_queries", [])
-        elif isinstance(article.get("related_search_terms"), str):
-            try:
-                article["related_search_terms"] = json.loads(article["related_search_terms"])
-            except (json.JSONDecodeError, TypeError):
-                article["related_search_terms"] = []
 
-    # 5. Render email
     print("  Rendering email...")
     html = render_email(digest, callbacks, config)
 
     if dry_run:
-        # Save to file for preview
         preview_path = Path(__file__).parent / "data" / "preview.html"
         with open(preview_path, "w") as f:
             f.write(html)
@@ -208,15 +228,12 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
         print(f"  Open in browser: file://{preview_path.resolve()}")
         return True
 
-    # 6. Send
     print("  Sending digest...")
     success = send_email(html, digest)
 
     if success:
-        # 7. Record the digest and advance repetitions
         article_ids = [a["id"] for a in digest["articles"]]
         save_digest(digest["theme"], digest.get("theme_description", ""), article_ids)
-
         create_repetitions_for_digest(digest["articles"], config)
 
         callback_ids = [cb["repetition_id"] for cb in callbacks]
@@ -228,6 +245,76 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
     return success
 
 
+def stage_add_concept(config: dict):
+    """Interactive mode: add a concept directly to the digest pool and repetition queue."""
+    print("\nAdd a concept to your digest and spaced repetition system.")
+    print("It will be eligible for future digests and get a callback question.\n")
+
+    concept_name = input("Concept name: ").strip()
+    if not concept_name:
+        print("  [!] Concept name is required.")
+        return
+
+    explanation = input("Your explanation (in your own words): ").strip()
+    if not explanation:
+        print("  [!] Explanation is required.")
+        return
+
+    topics = config.get("topics", [])
+    print("\nTopics:")
+    for i, t in enumerate(topics, 1):
+        print(f"  {i}. {t['name']}")
+    print(f"  {len(topics) + 1}. Other")
+
+    topic_choice = input(f"Select topic (1–{len(topics) + 1}): ").strip()
+    try:
+        idx = int(topic_choice) - 1
+        topic = topics[idx]["name"] if 0 <= idx < len(topics) else "General Interest"
+    except (ValueError, IndexError):
+        topic = "General Interest"
+
+    source = input("Source (optional, e.g. 'INSEAD Week 3', or press Enter to skip): ").strip()
+
+    print(f"\n  Processing '{concept_name}' through Claude...")
+    result = process_concept(concept_name, explanation, topic, config)
+    if not result:
+        print("  [!] Failed to process concept.")
+        return
+
+    article_id = hashlib.sha256(
+        f"concept:{concept_name}:{datetime.now().isoformat()}".encode()
+    ).hexdigest()[:16]
+    source_label = f"[Manual] {source}" if source else "[Manual Concept]"
+
+    article = {
+        "id": article_id,
+        "source_name": source_label,
+        "title": concept_name,
+        "url": "",
+        "raw_content": explanation,
+    }
+    save_article(article)
+    _save_processed_article(article_id, result)
+
+    article_for_rep = {
+        "id": article_id,
+        "title": concept_name,
+        "url": "",
+        "summary": result.get("insight", ""),
+        "key_takeaways": result.get("key_takeaways", []),
+        "think_about_this": result.get("think_about_this", ""),
+        "core_concept": result.get("core_concept", concept_name),
+    }
+    create_repetitions_for_digest([article_for_rep], config)
+
+    intervals = config.get("repetition", {}).get("intervals", [1])
+    print(f"\n  [✓] '{concept_name}' added.")
+    print(f"      Topic: {topic}")
+    print(f"      First review in {intervals[0]} day(s)")
+    if result.get("think_about_this"):
+        print(f"      First question: {result['think_about_this']}")
+
+
 # ---- Entry point ----
 
 def main():
@@ -237,10 +324,7 @@ def main():
     print(f"  Daily Digest — {mode.upper()} mode")
     print(f"{'='*50}\n")
 
-    # Initialize database
     init_db()
-
-    # Load config
     config = load_config()
 
     if mode == "ingest":
@@ -272,9 +356,12 @@ def main():
         actions = check_replies(config)
         print(f"  {len(actions)} actions processed.")
 
+    elif mode == "add-concept":
+        stage_add_concept(config)
+
     else:
         print(f"Unknown mode: {mode}")
-        print("Usage: python main.py [digest|ingest|process|test|replies]")
+        print("Usage: python main.py [digest|ingest|process|test|replies|add-concept]")
         sys.exit(1)
 
 
