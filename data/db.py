@@ -42,6 +42,7 @@ def init_db():
             contrarian_angle TEXT,
             further_reading TEXT,
             think_framework TEXT,
+            historical_analog TEXT,
             ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed_at TIMESTAMP
         );
@@ -119,6 +120,7 @@ def init_db():
         ("contrarian_angle", "TEXT"),
         ("further_reading", "TEXT"),
         ("think_framework", "TEXT"),
+        ("historical_analog", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE articles ADD COLUMN {col} {definition}")
@@ -162,14 +164,15 @@ def update_article_processing(article_id: str, summary: str, takeaways: list,
                                insight: str = "", so_what: str = "",
                                contrarian_angle: str = "",
                                further_reading: list = None,
-                               think_framework: str = ""):
+                               think_framework: str = "",
+                               historical_analog: dict = None):
     conn = get_connection()
     conn.execute("""
         UPDATE articles
         SET summary = ?, key_takeaways = ?, tags = ?, relevance_score = ?,
             think_about_this = ?, core_concept = ?, related_search_terms = ?,
             insight = ?, so_what = ?, contrarian_angle = ?, further_reading = ?,
-            think_framework = ?, processed_at = ?
+            think_framework = ?, historical_analog = ?, processed_at = ?
         WHERE id = ?
     """, (
         summary,
@@ -184,6 +187,7 @@ def update_article_processing(article_id: str, summary: str, takeaways: list,
         contrarian_angle,
         json.dumps(further_reading or []),
         think_framework,
+        json.dumps(historical_analog) if historical_analog else None,
         datetime.now().isoformat(),
         article_id
     ))

@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { font-family: Georgia, 'Times New Roman', serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background: #fafafa; }
+  body { font-family: Georgia, 'Times New Roman', serif; line-height: 1.6; color: #1a1a1a; max-width: 620px; margin: 0 auto; padding: 20px; background: #fafafa; }
   .header { border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 24px; }
   .header h1 { font-size: 22px; margin: 0 0 4px 0; letter-spacing: -0.5px; }
   .header .date { font-size: 13px; color: #666; font-family: -apple-system, sans-serif; }
   .theme-box { background: #f0f0f0; border-left: 3px solid #333; padding: 12px 16px; margin-bottom: 28px; font-style: italic; font-size: 15px; }
-  .item { margin-bottom: 36px; }
+  .item { margin-bottom: 40px; border-bottom: 1px solid #e8e8e8; padding-bottom: 32px; }
+  .item:last-of-type { border-bottom: none; }
   .item-number { font-family: -apple-system, sans-serif; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
   .item h2 { font-size: 18px; margin: 0 0 4px 0; }
   .item h2 a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #ccc; }
@@ -18,18 +19,30 @@
   .item .insight { font-size: 15px; margin-bottom: 8px; }
   .item .so-what { font-size: 14px; color: #2a5a8a; margin-bottom: 6px; font-family: -apple-system, sans-serif; }
   .item .so-what strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2a5a8a; }
-  .item .contrarian { font-size: 14px; color: #7a3a2a; margin-bottom: 10px; font-family: -apple-system, sans-serif; }
+  .item .contrarian { font-size: 14px; color: #7a3a2a; margin-bottom: 12px; font-family: -apple-system, sans-serif; }
   .item .contrarian strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #7a3a2a; }
+  .expert-lenses { background: #f5f5f0; border-radius: 4px; padding: 12px 16px; margin-bottom: 12px; }
+  .expert-lenses-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
+  .expert-entry { margin-bottom: 10px; font-size: 14px; font-family: -apple-system, sans-serif; }
+  .expert-entry:last-child { margin-bottom: 0; }
+  .expert-name { font-weight: 600; color: #333; display: block; margin-bottom: 2px; }
+  .expert-analysis { color: #444; line-height: 1.5; }
   .item .think { background: #f8f5e6; padding: 10px 14px; border-radius: 4px; font-size: 14px; margin-bottom: 8px; }
   .item .think strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a7a3a; }
   .item-feedback { font-size: 12px; color: #999; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
   .item-feedback a { color: #888; text-decoration: none; }
   .item-feedback a:hover { color: #333; }
-  .further-reading { font-size: 13px; color: #555; font-family: -apple-system, sans-serif; }
+  .further-reading { font-size: 13px; color: #555; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
   .further-reading strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; display: block; margin-bottom: 4px; }
   .further-reading ul { margin: 0; padding-left: 16px; }
   .further-reading li { margin-bottom: 6px; line-height: 1.4; }
   .format-tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; background: #ececec; border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; font-family: -apple-system, sans-serif; }
+  .historical-echo { background: #f0eef8; border-left: 3px solid #8a7ab0; padding: 10px 14px; border-radius: 0 4px 4px 0; font-size: 13px; font-family: -apple-system, sans-serif; color: #444; }
+  .historical-echo-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a7ab0; font-weight: 600; margin-bottom: 6px; }
+  .confidence-tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; background: #dddaee; color: #6a5a90; border-radius: 3px; padding: 1px 5px; margin-left: 6px; }
+  .echo-event { font-weight: 600; margin-bottom: 4px; color: #333; }
+  .echo-row { margin-bottom: 3px; line-height: 1.4; }
+  .echo-row span { color: #7a6a9a; font-weight: 600; }
   .callbacks { background: #f0f4f8; border-radius: 6px; padding: 16px 20px; margin: 32px 0; }
   .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 12px 0; font-family: -apple-system, sans-serif; }
   .callback-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #dce4ec; }
@@ -66,6 +79,18 @@
   <div class="contrarian"><strong>Counterpoint</strong> {{ item.contrarian_angle }}</div>
   {% endif %}
 
+  {% if item.expert_analyses %}
+  <div class="expert-lenses">
+    <div class="expert-lenses-label">Expert lenses</div>
+    {% for ea in item.expert_analyses %}
+    <div class="expert-entry">
+      <span class="expert-name">{{ ea.expert }}</span>
+      <span class="expert-analysis">{{ ea.analysis }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if item.think_about_this %}
   <div class="think">
     <strong>Think about this</strong><br>
@@ -79,6 +104,8 @@
     <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=more item {{ loop.index }}">👍 More like this</a>
     &nbsp;·&nbsp;
     <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=less item {{ loop.index }}">👎 Less of this</a>
+    &nbsp;·&nbsp;
+    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=explore item {{ loop.index }}">🔭 Explore deeper</a>
   </div>
 
   {% if item.further_reading %}
@@ -91,6 +118,16 @@
       </li>
       {% endfor %}
     </ul>
+  </div>
+  {% endif %}
+
+  {% if item.historical_analog and item.historical_analog.event %}
+  <div class="historical-echo">
+    <div class="historical-echo-label">Historical echo <span class="confidence-tag">{{ item.historical_analog.confidence }}</span></div>
+    <div class="echo-event">{{ item.historical_analog.event }}</div>
+    <div class="echo-row"><span>Mechanism:</span> {{ item.historical_analog.mechanism }}</div>
+    <div class="echo-row"><span>Key difference:</span> {{ item.historical_analog.key_difference }}</div>
+    <div class="echo-row"><span>Counter-case:</span> {{ item.historical_analog.counter_case }}</div>
   </div>
   {% endif %}
 </div>
@@ -109,7 +146,7 @@
 {% endif %}
 
 <div class="footer">
-  Daily Digest · Reply with "add [url]" to queue an article · "concept: [name] | [explanation] | [topic]" to add a concept · "less [topic]" to adjust topics
+  Daily Digest · Reply with "add [url]" to queue an article · "concept: [name] | [explanation] | [topic]" to add a concept · "explore item N" for an Opus deep-dive prompt · "less [topic]" to adjust topics
 </div>
 
 </body>

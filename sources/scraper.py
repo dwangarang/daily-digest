@@ -79,7 +79,7 @@ def fetch_evergreen_source(source: dict) -> list:
         # Skip navigation links, anchors, and very short text
         if not text or len(text) < 5:
             continue
-        if href.startswith("#") or href.startswith("mailto:"):
+        if href.startswith("#") or href.startswith("mailto:") or href.startswith("javascript:"):
             continue
 
         full_url = urljoin(source["url"], href)

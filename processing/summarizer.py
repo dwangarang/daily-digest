@@ -78,7 +78,14 @@ Return a JSON object with this exact structure (no markdown fences, no other tex
         {{"title": "Specific title", "author": "Author or empty string", "format": "memo", "reason": "One sentence on the distinct angle"}},
         {{"title": "Specific title", "author": "Author or empty string", "format": "essay", "reason": "One sentence on the distinct angle"}}
     ],
-    "core_concept": "The single most important idea in one sentence. Standalone insight for spaced repetition — not a reference to the article."
+    "core_concept": "The single most important idea in one sentence. Standalone insight for spaced repetition — not a reference to the article.",
+    "historical_analog": {{
+        "event": "Specific historical event, period, or case — e.g. '2008 CDO market collapse', 'Japan 1990s asset bubble'",
+        "mechanism": "The structural parallel — WHY it rhymes mechanically, not just what it superficially resembles",
+        "key_difference": "The most important way this situation structurally differs from the historical case",
+        "counter_case": "A historical case where similar conditions did NOT produce the feared outcome, and the key reason why",
+        "confidence": "high | medium | speculative"
+    }}
 }}
 
 Rules:
@@ -90,7 +97,8 @@ Rules:
 - think_about_this: MUST use one framework from the FRAMEWORK LENSES list as the cross-domain lens. Pick the most apt one — don't default to Marks for everything.
 - think_framework: copy the exact name string from the list — this is used to enforce digest-level framework diversity
 - further_reading: include exactly 3 recommendations — one academic/research piece, one practitioner piece (memo, blog post, interview, or talk), one long-form essay or book chapter. No two from the same author. Be specific: "Howard Marks' October 2001 memo 'You Can't Predict. You Can Prepare.'" not "a Howard Marks memo". Format values: memo | essay | research paper | talk | interview | blog post | book chapter
-- core_concept: a standalone insight, not a reference to the article"""
+- core_concept: a standalone insight, not a reference to the article
+- historical_analog: ONLY return non-null when there is a genuine structural mechanism parallel (medium or high confidence). Return null if no strong analog exists — do not force one. The key_difference must be stated honestly even when the analog is strong."""
 
 
 def _fetch_content(article: dict) -> str:
@@ -140,7 +148,7 @@ def process_articles_batch(articles: list, config: dict) -> dict:
             "custom_id": article["id"],
             "params": {
                 "model": model,
-                "max_tokens": 1200,
+                "max_tokens": 2000,
                 "system": [{"type": "text", "text": system_text,
                              "cache_control": {"type": "ephemeral"}}],
                 "messages": [{"role": "user", "content": user_text}],
@@ -220,7 +228,7 @@ def process_article(article: dict, config: dict) -> dict | None:
         model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         response = _get_client().messages.create(
             model=model,
-            max_tokens=1200,
+            max_tokens=2000,
             system=[{"type": "text", "text": system_text,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_text}],
@@ -280,7 +288,7 @@ Rules for further_reading: one academic/research piece, one practitioner piece (
         model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         response = _get_client().messages.create(
             model=model,
-            max_tokens=1200,
+            max_tokens=2000,
             system=[{"type": "text", "text": system_text,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_text}],

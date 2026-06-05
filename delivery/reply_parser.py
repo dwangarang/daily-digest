@@ -15,9 +15,12 @@ import os
 import re
 import imaplib
 import email
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from data.db import (
     save_feedback, add_to_manual_queue, add_to_concept_queue,
-    get_most_recent_digest_articles
+    get_most_recent_digest_articles, get_connection
 )
 
 
@@ -129,6 +132,18 @@ def _parse_commands(body: str, config: dict) -> list:
             print(f"    → Queued URL: {url}")
             continue
 
+        # explore item N → email back an Opus deep-dive prompt
+        explore_match = re.match(r'explore\s+item\s*(\d+)', line_lower)
+        if explore_match:
+            item_num = int(explore_match.group(1))
+            if article_map is None:
+                article_map = _get_recent_article_map()
+            article_id = article_map.get(item_num)
+            if article_id:
+                _send_explore_prompt(article_id, item_num, config)
+                actions.append({"type": "explore", "item": item_num})
+            continue
+
         # more item N / less item N — tied to actual article_id
         item_feedback_match = re.match(r'(more|less)\s+item\s*(\d+)', line_lower)
         if item_feedback_match:
@@ -182,3 +197,53 @@ def _parse_commands(body: str, config: dict) -> list:
             continue
 
     return actions
+
+
+def _send_explore_prompt(article_id: str, item_num: int, config: dict):
+    """Generate an Opus deep-dive prompt and email it back to the reader."""
+    from processing.analyst import generate_expert_analyses, build_opus_prompt
+
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM articles WHERE id = ?", (article_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        print(f"  [!] Could not find article {article_id} for explore prompt")
+        return
+
+    article = dict(row)
+    expert_analyses = generate_expert_analyses(article, config)
+    opus_prompt = build_opus_prompt(article, expert_analyses, config)
+
+    gmail_addr = os.environ["GMAIL_ADDRESS"]
+    gmail_pass = os.environ["GMAIL_APP_PASSWORD"]
+    recipient = os.environ["RECIPIENT_EMAIL"]
+
+    title = article.get("title", f"Item {item_num}")[:60]
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Opus prompt — {title}"
+    msg["From"] = f"Daily Digest <{gmail_addr}>"
+    msg["To"] = recipient
+
+    body = f"""Opus deep-dive prompt for item {item_num}: {title}
+
+Copy everything between the lines and paste into claude.ai → set model to Claude Opus 4 → send.
+Your Pro subscription covers it — zero API cost.
+
+{'━' * 60}
+
+{opus_prompt}
+
+{'━' * 60}
+
+After Opus responds, try asking it to "steelman the contrarian angle" or "apply [framework] more rigorously" to keep going.
+"""
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(gmail_addr, gmail_pass)
+            server.send_message(msg)
+        print(f"  → Opus prompt emailed for item {item_num}")
+    except Exception as e:
+        print(f"  [!] Failed to send explore prompt: {e}")

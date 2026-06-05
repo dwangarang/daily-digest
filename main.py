@@ -32,6 +32,7 @@ from sources.rss import fetch_rss_source
 from sources.api import fetch_api_source
 from sources.scraper import fetch_scrape_source, fetch_evergreen_source, fetch_full_article
 from processing.summarizer import process_articles_batch, process_article, process_concept
+from processing.analyst import generate_expert_analyses, build_opus_prompt
 from processing.curator import curate_digest
 from processing.repetition import (
     create_repetitions_for_digest, get_callback_questions, mark_callbacks_shown
@@ -110,6 +111,7 @@ def _save_processed_article(article_id: str, result: dict):
         contrarian_angle=result.get("contrarian_angle", ""),
         further_reading=result.get("further_reading", []),
         think_framework=result.get("think_framework", ""),
+        historical_analog=result.get("historical_analog"),
     )
 
 
@@ -276,6 +278,7 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
     callbacks = get_callback_questions(config)
     print(f"  Callbacks: {len(callbacks)} due for review")
 
+    print("  Running expert lens analysis...")
     for article in digest["articles"]:
         for field in ("key_takeaways", "tags", "further_reading"):
             if isinstance(article.get(field), str):
@@ -283,8 +286,20 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
                     article[field] = json.loads(article[field])
                 except (json.JSONDecodeError, TypeError):
                     article[field] = []
+
+        if isinstance(article.get("historical_analog"), str):
+            try:
+                article["historical_analog"] = json.loads(article["historical_analog"])
+            except (json.JSONDecodeError, TypeError):
+                article["historical_analog"] = None
+
         if not article.get("think_about_this"):
             article["think_about_this"] = ""
+
+        article["expert_analyses"] = generate_expert_analyses(article, config)
+        article["opus_prompt"] = build_opus_prompt(
+            article, article["expert_analyses"], config
+        )
 
     print("  Rendering email...")
     html = render_email(digest, callbacks, config)
@@ -375,6 +390,93 @@ def stage_add_concept(config: dict):
         print(f"      First question: {result['think_about_this']}")
 
 
+def stage_add_file(config: dict):
+    """Add content from a local PDF or text file to the digest pool."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py add-file path/to/file.pdf")
+        return
+
+    file_path = Path(sys.argv[2])
+    if not file_path.exists():
+        print(f"[!] File not found: {file_path}")
+        return
+
+    suffix = file_path.suffix.lower()
+    if suffix == ".pdf":
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        except ImportError:
+            print("[!] pdfplumber not installed. Run: pip install pdfplumber")
+            return
+    elif suffix in (".txt", ".md"):
+        text = file_path.read_text(encoding="utf-8", errors="ignore")
+    else:
+        print(f"[!] Unsupported format: {suffix}. Use .pdf or .txt")
+        return
+
+    if not text.strip():
+        print("[!] No text extracted from file.")
+        return
+
+    print(f"\nFile: {file_path.name}  ({len(text):,} chars extracted)\n")
+
+    title = input("Title (e.g. 'Howard Marks memo: The Most Important Thing, 2003'): ").strip()
+    author = input("Author: ").strip()
+    source = input("Source label (e.g. 'Oaktree Capital, 2003'): ").strip()
+
+    topics = config.get("topics", [])
+    print("\nTopics:")
+    for i, t in enumerate(topics, 1):
+        print(f"  {i}. {t['name']}")
+    topic_choice = input(f"Select topic (1-{len(topics)}): ").strip()
+    try:
+        idx = int(topic_choice) - 1
+        topic_tag = topics[idx]["name"] if 0 <= idx < len(topics) else "General Interest"
+    except (ValueError, IndexError):
+        topic_tag = "General Interest"
+
+    article_id = hashlib.sha256(
+        f"file:{file_path.name}:{title}".encode()
+    ).hexdigest()[:16]
+
+    if article_exists(article_id):
+        print("[!] This file has already been added (same filename + title).")
+        return
+
+    source_label = f"[File] {author}" if author else "[File Upload]"
+    article = {
+        "id": article_id,
+        "source_name": source_label,
+        "title": title or file_path.stem,
+        "url": "",
+        "raw_content": text[:15000],
+    }
+
+    save_article(article)
+
+    print(f"\n  Processing '{title}' through Claude...")
+    result = process_article(article, config)
+
+    if result:
+        _save_processed_article(article_id, result)
+        create_repetitions_for_digest([{
+            "id": article_id,
+            "title": title,
+            "url": "",
+            "summary": result.get("insight", ""),
+            "key_takeaways": result.get("key_takeaways", []),
+            "think_about_this": result.get("think_about_this", ""),
+            "core_concept": result.get("core_concept", title),
+        }], config)
+        print(f"\n  [✓] '{title}' added to digest pool and spaced repetition queue.")
+        if result.get("think_about_this"):
+            print(f"      First question: {result['think_about_this']}")
+    else:
+        print("  [!] Processing failed.")
+
+
 # ---- Entry point ----
 
 def main():
@@ -423,9 +525,12 @@ def main():
     elif mode == "add-concept":
         stage_add_concept(config)
 
+    elif mode == "add-file":
+        stage_add_file(config)
+
     else:
         print(f"Unknown mode: {mode}")
-        print("Usage: python main.py [digest|ingest|process|sweep|test|replies|add-concept]")
+        print("Usage: python main.py [digest|ingest|process|sweep|test|replies|add-concept|add-file]")
         sys.exit(1)
 
 

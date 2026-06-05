@@ -37,6 +37,13 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
         tags = _parse_json_field(article.get("tags"))
         further_reading = _parse_json_field(article.get("further_reading"))
 
+        historical = article.get("historical_analog")
+        if isinstance(historical, str):
+            try:
+                historical = json.loads(historical)
+            except Exception:
+                historical = None
+
         items.append({
             "title": article.get("title", "Untitled"),
             "url": article.get("url", "#"),
@@ -47,6 +54,8 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
             "tags": tags,
             "think_about_this": article.get("think_about_this", ""),
             "further_reading": further_reading,
+            "expert_analyses": article.get("expert_analyses", []),
+            "historical_analog": historical,
         })
 
     html = template.render(
