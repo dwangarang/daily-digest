@@ -112,6 +112,8 @@ def _save_processed_article(article_id: str, result: dict):
         further_reading=result.get("further_reading", []),
         think_framework=result.get("think_framework", ""),
         historical_analog=result.get("historical_analog"),
+        context=result.get("context", ""),
+        takeaway=result.get("takeaway", ""),
     )
 
 

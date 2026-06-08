@@ -16,6 +16,7 @@
   .item h2 a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #ccc; }
   .item h2 a:hover { border-color: #1a1a1a; }
   .item .source { font-size: 12px; color: #888; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
+  .item .context { font-size: 14px; color: #666; font-family: -apple-system, sans-serif; margin-bottom: 8px; font-style: italic; }
   .item .insight { font-size: 15px; margin-bottom: 8px; }
   .item .so-what { font-size: 14px; color: #2a5a8a; margin-bottom: 6px; font-family: -apple-system, sans-serif; }
   .item .so-what strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2a5a8a; }
@@ -23,10 +24,13 @@
   .item .contrarian strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #7a3a2a; }
   .expert-lenses { background: #f5f5f0; border-radius: 4px; padding: 12px 16px; margin-bottom: 12px; }
   .expert-lenses-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
-  .expert-entry { margin-bottom: 10px; font-size: 14px; font-family: -apple-system, sans-serif; }
+  .expert-entry { margin-bottom: 12px; font-size: 14px; font-family: -apple-system, sans-serif; }
   .expert-entry:last-child { margin-bottom: 0; }
-  .expert-name { font-weight: 600; color: #333; display: block; margin-bottom: 2px; }
-  .expert-analysis { color: #444; line-height: 1.5; }
+  .expert-name { font-weight: 600; color: #333; }
+  .expert-lens-key { font-size: 11px; color: #999; font-style: italic; margin-left: 4px; }
+  .expert-analysis { color: #444; line-height: 1.5; display: block; margin-top: 2px; }
+  .takeaway { background: #f0f7f0; border-left: 3px solid #4a8a5a; padding: 10px 14px; border-radius: 0 4px 4px 0; font-size: 14px; font-family: -apple-system, sans-serif; margin-bottom: 10px; color: #2a4a2a; }
+  .takeaway strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #4a8a5a; }
   .item .think { background: #f8f5e6; padding: 10px 14px; border-radius: 4px; font-size: 14px; margin-bottom: 8px; }
   .item .think strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a7a3a; }
   .item-feedback { font-size: 12px; color: #999; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
@@ -69,6 +73,10 @@
   <h2><a href="{{ item.url }}">{{ item.title }}</a></h2>
   <div class="source">{{ item.source_name }}{% if item.tags %} · {{ item.tags | join(', ') }}{% endif %}</div>
 
+  {% if item.context %}
+  <div class="context">{{ item.context }}</div>
+  {% endif %}
+
   <div class="insight">{{ item.insight }}</div>
 
   {% if item.so_what %}
@@ -84,7 +92,7 @@
     <div class="expert-lenses-label">Expert lenses</div>
     {% for ea in item.expert_analyses %}
     <div class="expert-entry">
-      <span class="expert-name">{{ ea.expert }}</span>
+      <span class="expert-name">{{ ea.expert }}</span>{% if ea.lens_key %}<span class="expert-lens-key">{{ ea.lens_key }}</span>{% endif %}
       <span class="expert-analysis">{{ ea.analysis }}</span>
     </div>
     {% endfor %}
@@ -95,6 +103,13 @@
   <div class="think">
     <strong>Think about this</strong><br>
     {{ item.think_about_this }}
+  </div>
+  {% endif %}
+
+  {% if item.takeaway %}
+  <div class="takeaway">
+    <strong>Takeaway</strong><br>
+    {{ item.takeaway }}
   </div>
   {% endif %}
 

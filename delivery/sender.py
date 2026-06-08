@@ -44,18 +44,27 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
             except Exception:
                 historical = None
 
+        # Attach lens_key from config to each expert analysis
+        expert_lookup = {e["name"]: e.get("lens_key", "") for e in config.get("experts", [])}
+        enriched_analyses = [
+            {**ea, "lens_key": expert_lookup.get(ea.get("expert", ""), "")}
+            for ea in article.get("expert_analyses", [])
+        ]
+
         items.append({
             "title": article.get("title", "Untitled"),
             "url": article.get("url", "#"),
             "source_name": article.get("source_name", ""),
+            "context": article.get("context", ""),
             "insight": article.get("insight") or article.get("summary", ""),
             "so_what": article.get("so_what", ""),
             "contrarian_angle": article.get("contrarian_angle", ""),
             "tags": tags,
             "think_about_this": article.get("think_about_this", ""),
             "further_reading": further_reading,
-            "expert_analyses": article.get("expert_analyses", []),
+            "expert_analyses": enriched_analyses,
             "historical_analog": historical,
+            "takeaway": article.get("takeaway", ""),
         })
 
     html = template.render(

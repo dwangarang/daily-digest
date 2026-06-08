@@ -65,6 +65,7 @@ FRAMEWORK LENSES (for cross-domain synthesis):
 
 Return a JSON object with this exact structure (no markdown fences, no other text):
 {{
+    "context": "1-2 neutral sentences orienting the reader: what is this piece, who wrote/published it, and what is its central claim or event? No opinion here — just enough to know what you're about to evaluate.",
     "insight": "The single non-obvious or contrarian takeaway. What would a smart person miss on first read? What's the second-order implication? Direct, opinionated voice. 2-3 sentences max.",
     "so_what": "One sentence connecting this insight to the reader's professional context — AI strategy, enterprise SaaS GTM, or China-ASEAN markets.",
     "contrarian_angle": "One sentence: the strongest counterargument to the article's thesis, or the thing most readers would get wrong about it.",
@@ -79,6 +80,7 @@ Return a JSON object with this exact structure (no markdown fences, no other tex
         {{"title": "Specific title", "author": "Author or empty string", "format": "essay", "reason": "One sentence on the distinct angle"}}
     ],
     "core_concept": "The single most important idea in one sentence. Standalone insight for spaced repetition — not a reference to the article.",
+    "takeaway": "One concrete action or mental update the reader should make. Specific enough to apply immediately — not 'think about AI risk' but 'when evaluating AI infrastructure vendors, treat switching costs as the primary filter before price.'",
     "historical_analog": {{
         "event": "Specific historical event, period, or case — e.g. '2008 CDO market collapse', 'Japan 1990s asset bubble'",
         "mechanism": "The structural parallel — WHY it rhymes mechanically, not just what it superficially resembles",
@@ -89,6 +91,7 @@ Return a JSON object with this exact structure (no markdown fences, no other tex
 }}
 
 Rules:
+- context: purely neutral orientation. No opinion. If the reader doesn't know this source/author, this sentence tells them.
 - insight: opinionated, not neutral. Second-order thinking, not first read.
 - so_what: name a specific domain the reader cares about — not generic "business"
 - contrarian_angle: steelman the opposing view or surface the common misreading
@@ -98,6 +101,7 @@ Rules:
 - think_framework: copy the exact name string from the list — this is used to enforce digest-level framework diversity
 - further_reading: include exactly 3 recommendations — one academic/research piece, one practitioner piece (memo, blog post, interview, or talk), one long-form essay or book chapter. No two from the same author. Be specific: "Howard Marks' October 2001 memo 'You Can't Predict. You Can Prepare.'" not "a Howard Marks memo". Format values: memo | essay | research paper | talk | interview | blog post | book chapter
 - core_concept: a standalone insight, not a reference to the article
+- takeaway: one concrete thing to do or believe differently. Not a summary. Actionable.
 - historical_analog: ONLY return non-null when there is a genuine structural mechanism parallel (medium or high confidence). Return null if no strong analog exists — do not force one. The key_difference must be stated honestly even when the analog is strong."""
 
 
