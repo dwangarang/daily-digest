@@ -61,8 +61,11 @@ def fetch_evergreen_source(source: dict) -> list:
     will fetch full content for each article when it processes them.
     """
     try:
+        # paulgraham.com has an SSL cert issue with Python's verifier on macOS
+        verify = "paulgraham.com" not in source["url"]
         resp = requests.get(source["url"], timeout=15,
-                          headers={"User-Agent": "DailyDigestBot/1.0"})
+                            headers={"User-Agent": "DailyDigestBot/1.0"},
+                            verify=verify)
         resp.raise_for_status()
     except Exception as e:
         print(f"  [!] Failed to fetch evergreen index {source['name']}: {e}")
@@ -101,8 +104,10 @@ def fetch_evergreen_source(source: dict) -> list:
 def fetch_full_article(url: str) -> str:
     """Fetch full text content from an article URL. Used by the summarizer."""
     try:
+        verify = "paulgraham.com" not in url
         resp = requests.get(url, timeout=15,
-                          headers={"User-Agent": "DailyDigestBot/1.0"})
+                            headers={"User-Agent": "DailyDigestBot/1.0"},
+                            verify=verify)
         resp.raise_for_status()
     except Exception as e:
         print(f"  [!] Failed to fetch article at {url}: {e}")

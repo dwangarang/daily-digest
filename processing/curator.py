@@ -117,14 +117,14 @@ def curate_digest(config: dict) -> dict | None:
     candidate_summaries = []
     for i, a in enumerate(candidates[:40]):  # cap at 40 for prompt size
         tags = json.loads(a.get("tags", "[]")) if a.get("tags") else []
+        insight = (a.get("insight") or a.get("summary", ""))[:150]
         candidate_summaries.append({
             "index": i,
-            "id": a["id"],
             "title": a["title"],
             "source": a["source_name"],
-            "insight": a.get("insight") or a.get("summary", ""),
+            "insight": insight,
             "tags": tags,
-            "relevance_score": a.get("relevance_score", 0),
+            "relevance_score": round(a.get("relevance_score", 0), 2),
             "think_framework": a.get("think_framework", ""),
         })
 
@@ -166,19 +166,21 @@ TOPICS IN RECENT DIGESTS (avoid repeating):
 {json.dumps(recent_topics)}
 
 RECENT READER FEEDBACK:
-{json.dumps(recent_feedback) if recent_feedback else "None yet."}"""
+{json.dumps(recent_feedback) if recent_feedback else "None yet."}
+
+Return ONLY valid JSON. No prose, no reasoning, no markdown. Your entire response must be a single JSON object."""
 
     try:
         model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         response = _get_client().messages.create(
             model=model,
-            max_tokens=600,
-            system=[{"type": "text", "text": system_text,
-                     "cache_control": {"type": "ephemeral"}}],
+            max_tokens=1000,
+            system=system_text,
             messages=[{"role": "user", "content": user_text}],
         )
 
         raw_text = response.content[0].text.strip()
+        # Strip any markdown fencing
         if raw_text.startswith("```"):
             raw_text = raw_text.split("\n", 1)[1]
         if raw_text.endswith("```"):
