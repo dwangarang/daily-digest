@@ -131,6 +131,9 @@ If you don't want the pipeline depending on your laptop being awake, `.github/wo
 | `python main.py process` | Only process unprocessed articles through Claude |
 | `python main.py test` | Full pipeline but saves email to file instead of sending |
 | `python main.py replies` | Only check inbox for feedback replies |
+| `python main.py sweep` | Process ALL unprocessed articles (useful right after initial setup) |
+| `python main.py add-concept` | Interactively add something you learned elsewhere (a lecture, a conversation) into the digest pool and spaced-repetition queue |
+| `python main.py add-file path/to/file.pdf` | Ingest a PDF or text file (a memo, a transcript) the same way |
 
 ### Replying to digests
 
@@ -175,6 +178,28 @@ Edit `config.yaml` and add entries under `sources`:
   topics: ["General Interest", "Investing & Mental Models"]
 ```
 
+### Expert lenses
+
+Add named analytical lenses under `experts` in `config.yaml` — 2-3 relevant ones get applied to each digest article, matched by domain overlap with the article's tags:
+
+```yaml
+experts:
+  - name: "Ben Thompson"
+    lens_key: "Aggregation Theory — control demand, suppliers follow"
+    framework: "Aggregation Theory: platforms that control demand aggregate suppliers without owning them..."
+    domains: ["AI & Machine Learning", "GTM & Product Strategy"]
+```
+
+Write `framework` as their specific documented mental model, not generic wisdom — the analysis is only as sharp as what you put in. Experts are config-only until you run:
+
+```bash
+python scripts/sync_experts.py
+```
+
+which pushes them through the concept pipeline so they also show up in your spaced-repetition review queue, not just as a digest-time lens.
+
+You can also mark any source `role: "lens"` (see the comment above the `sources` block in `config.example.yaml`) to have it supply a connecting framework across the digest instead of competing for one of the content slots — this is how the Paul Graham essays source works by default.
+
 ## Project Structure
 
 ```
@@ -194,6 +219,8 @@ daily-digest/
 │   ├── template.html     ← Email layout (Jinja2)
 │   ├── sender.py         ← Gmail SMTP sending
 │   └── reply_parser.py   ← Parse feedback from email replies
+├── scripts/              ← One-off / maintenance scripts (expert sync, PDF backfills, cron gate)
+├── .github/workflows/    ← Optional GitHub Actions scheduler (see Step 8)
 └── data/                 ← Local state (never committed)
     ├── db.py             ← Database schema and helpers
     └── digest.db         ← SQLite database (auto-created)
@@ -203,7 +230,7 @@ daily-digest/
 
 - **Claude API:** ~$0.10-0.30/day depending on article count (Sonnet is cost-efficient)
 - **Gmail:** Free
-- **Hosting (if not on Mac):** ~$4-5/month for a basic VPS
+- **Hosting:** Free if you run it on GitHub Actions (see Step 8) — no server to pay for or maintain. If you'd rather self-host on a always-on machine instead, budget ~$4-6/month for the cheapest tier of any VPS provider (Hetzner, DigitalOcean, Vultr); this workload is I/O-bound, not compute-heavy, so the smallest tier is enough.
 
 ## Security
 

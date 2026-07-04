@@ -40,6 +40,12 @@ topics:
 # Scrape: url is the page to scrape (basic article extraction)
 # Evergreen: url points to a page listing essays/articles (scraped once, then
 #            individual pieces are served over time)
+#
+# Lens sources: add `role: "lens"` to any source (e.g. an essayist you read
+# for mental models rather than news) to exclude it from competing for a
+# digest slot. Instead, its most relevant piece gets applied as a connecting
+# framework across that day's actual picks — see the "Today's Lens" section
+# in the email. At most one lens source's article is used per digest.
 
 sources:
   # --- Live feeds (checked daily) ---
@@ -51,6 +57,7 @@ sources:
   - name: "Paul Graham Essays"
     type: "evergreen"
     url: "https://paulgraham.com/articles.html"
+    role: "lens"  # optional: see "Lens sources" below
     topics: ["General Interest", "Investing & Mental Models"]
 
   - name: "Stratechery"
@@ -104,6 +111,33 @@ repetition:
   intervals: [1, 3, 7, 14, 30, 60]
   # Number of callback questions per digest
   callbacks_per_digest: 2
+
+# --- Expert Roster ---
+# Optional. Named analytical lenses applied to each digest article at send
+# time (2-3 relevant experts per article, matched by domain overlap with the
+# article's tags). Write `framework` as their specific documented mental
+# model, not generic wisdom — the more concrete, the better the analysis.
+# `lens_key` is a short label shown next to their name in the email.
+# `domains` should be a subset of your `topics` names above.
+#
+# These are config-only until you run `python scripts/sync_experts.py`,
+# which pushes them through the concept pipeline so they also show up in
+# your spaced-repetition review queue, not just as a digest-time lens.
+experts:
+  - name: "Ben Thompson"
+    lens_key: "Aggregation Theory — control demand, suppliers follow"
+    framework: "Aggregation Theory: platforms that control demand aggregate suppliers without owning them. Modular vs. integrated tech stacks. The internet enables direct-to-consumer, destroying traditional bundled distribution."
+    domains: ["AI & Machine Learning", "GTM & Product Strategy"]
+
+  - name: "Michael Mauboussin"
+    lens_key: "base rates — outside view before inside view, skill vs. luck"
+    framework: "Base rates over narratives. Distinguishes skill from luck using reversion to mean. Applies outside-view statistics before inside-view analysis. Competitive advantage periods are shorter than companies believe."
+    domains: ["Investing & Mental Models", "GTM & Product Strategy"]
+
+  - name: "Philip Tetlock"
+    lens_key: "superforecasting — update in small increments, outside view first"
+    framework: "Superforecasting: update frequently, in small increments, on specific falsifiable predictions. Foxes beat hedgehogs. Outside view first, inside view second. Track record over confidence. Decompose problems into sub-questions."
+    domains: ["General Interest", "Investing & Mental Models"]
 
 # --- Feedback ---
 feedback:
