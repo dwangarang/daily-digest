@@ -102,9 +102,17 @@ def curate_digest(config: dict) -> dict | None:
     items_per_digest = config.get("schedule", {}).get("items_per_digest", 4)
     topics = config.get("topics", [])
 
+    # Sources tagged role: "lens" (e.g. Paul Graham essays) supply an interpretive
+    # framework applied across the digest — they don't compete for a content slot.
+    lens_source_names = {s["name"] for s in config.get("sources", []) if s.get("role") == "lens"}
+
     raw_candidates = get_unsent_articles(limit=60)
+    lens_raw = [a for a in raw_candidates if a.get("source_name") in lens_source_names]
+    signal_raw = [a for a in raw_candidates if a.get("source_name") not in lens_source_names]
+
     # Hard dedup: one article per source before anything else
-    candidates = _dedup_by_source(raw_candidates)
+    candidates = _dedup_by_source(signal_raw)
+    lens_article = _dedup_by_source(lens_raw)[0] if lens_raw else None
 
     if len(candidates) < items_per_digest:
         print(f"  [!] Only {len(candidates)} unique-source candidates. Need {items_per_digest}.")
@@ -201,6 +209,7 @@ Return ONLY valid JSON. No prose, no reasoning, no markdown. Your entire respons
             "theme_description": selection.get("theme_description", ""),
             "articles": ordered_articles,
             "further_reading_queries": [],
+            "lens_article": lens_article,
         }
 
     except Exception as e:
@@ -212,4 +221,5 @@ Return ONLY valid JSON. No prose, no reasoning, no markdown. Your entire respons
             "theme_description": "Selected by relevance score.",
             "articles": fallback,
             "further_reading_queries": [],
+            "lens_article": lens_article,
         }

@@ -106,6 +106,20 @@ To find your exact paths, run:
 echo "cd $(pwd) && $(pwd)/venv/bin/python main.py digest"
 ```
 
+### Step 8: Or run it on GitHub Actions instead (optional)
+
+If you don't want the pipeline depending on your laptop being awake, `.github/workflows/digest.yml` runs it on GitHub's infrastructure instead, for free.
+
+1. **Fork this repo.**
+2. In your fork's Settings → Secrets and variables → Actions, add these repository secrets:
+   - `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `RECIPIENT_EMAIL` — same values as your `.env`
+   - `CONFIG_YAML` — the full contents of your `config.yaml` (it's gitignored, so it has to be injected this way rather than committed)
+   - `DATA_REPO_TOKEN` — see next step
+3. **Create a second, private repo** (e.g. `daily-digest-data`) to hold your `data/digest.db`. The public repo never commits your reading history or personal data — only this private repo does. Seed it with an initial `digest.db` (even an empty one works; `main.py` will initialize the schema on first run).
+4. Generate a fine-grained personal access token scoped to just that private repo with read/write access to contents, and save it as the `DATA_REPO_TOKEN` secret in step 2.
+5. That's it — the workflow runs hourly and only actually executes the pipeline when it's your configured `send_time` in your configured `schedule.timezone` (see `scripts/check_schedule.py`). Traveling? Just update `schedule.timezone` in your `config.yaml` and re-paste it into the `CONFIG_YAML` secret — no code or cron change needed to keep the digest landing in your local morning.
+6. To test without waiting for the schedule, trigger the workflow manually from the Actions tab with the "force" input checked.
+
 ## Usage
 
 ### Run modes

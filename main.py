@@ -32,7 +32,7 @@ from sources.rss import fetch_rss_source
 from sources.api import fetch_api_source
 from sources.scraper import fetch_scrape_source, fetch_evergreen_source, fetch_full_article
 from processing.summarizer import process_articles_batch, process_article, process_concept
-from processing.analyst import generate_expert_analyses, build_opus_prompt
+from processing.analyst import generate_expert_analyses, build_opus_prompt, generate_lens_framing
 from processing.curator import curate_digest
 from processing.repetition import (
     create_repetitions_for_digest, get_callback_questions, mark_callbacks_shown
@@ -303,6 +303,11 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
             article, article["expert_analyses"], config
         )
 
+    lens_article = digest.get("lens_article")
+    if lens_article:
+        print(f"  Applying lens: {lens_article['title'][:50]}")
+        digest["lens_framing"] = generate_lens_framing(lens_article, digest["articles"], config)
+
     print("  Rendering email...")
     html = render_email(digest, callbacks, config)
 
@@ -319,6 +324,8 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
 
     if success:
         article_ids = [a["id"] for a in digest["articles"]]
+        if lens_article:
+            article_ids.append(lens_article["id"])
         save_digest(digest["theme"], digest.get("theme_description", ""), article_ids)
         create_repetitions_for_digest(digest["articles"], config)
 

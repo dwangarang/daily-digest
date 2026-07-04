@@ -1,0 +1,78 @@
+name: Daily Digest
+
+on:
+  schedule:
+    # Runs hourly; scripts/check_schedule.py decides whether it's actually time
+    # to send, based on config.yaml's schedule.timezone + send_time. This is
+    # what makes the send time travel-proof — update schedule.timezone in
+    # config.yaml (via the CONFIG_YAML secret) when you change timezones,
+    # no workflow/cron edit needed.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass the schedule gate and run the full pipeline now'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Checkout private data repo
+        uses: actions/checkout@v4
+        with:
+          repository: dwangarang/daily-digest-data
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: data-repo
+
+      - name: Write config.yaml
+        env:
+          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+        run: printf '%s' "$CONFIG_YAML" > config.yaml
+
+      - name: Restore digest.db from private data repo
+        run: cp data-repo/digest.db data/digest.db
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check schedule
+        id: gate
+        run: python scripts/check_schedule.py
+
+      - name: Run digest pipeline
+        if: steps.gate.outputs.should_run == 'true' || github.event.inputs.force == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        run: python main.py digest
+
+      - name: Persist digest.db to private data repo
+        if: steps.gate.outputs.should_run == 'true' || github.event.inputs.force == 'true'
+        run: |
+          cp data/digest.db data-repo/digest.db
+          cd data-repo
+          git config user.name "daily-digest-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add digest.db
+          if git diff --cached --quiet; then
+            echo "No DB changes to commit"
+          else
+            git commit -m "Update digest.db $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi

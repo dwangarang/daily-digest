@@ -67,6 +67,16 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
             "takeaway": article.get("takeaway", ""),
         })
 
+    lens_article = digest.get("lens_article")
+    lens_framing = None
+    if lens_article and digest.get("lens_framing"):
+        lens_framing = {
+            "title": lens_article.get("title", ""),
+            "source_name": lens_article.get("source_name", ""),
+            "url": lens_article.get("url", "#"),
+            "framing": digest["lens_framing"],
+        }
+
     html = template.render(
         date=date.today().strftime("%B %d, %Y"),
         theme=digest.get("theme", "Today's Reads"),
@@ -74,6 +84,7 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
         item_count=len(items),
         items=items,
         callbacks=callbacks,
+        lens_framing=lens_framing,
         bot_email=os.environ.get("GMAIL_ADDRESS", ""),
     )
 

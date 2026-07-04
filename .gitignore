@@ -11,6 +11,12 @@ data/*.db-journal
 data/preview.html
 data/cron.log
 
+# Source PDFs (personal/copyrighted content — never commit)
+data/*.pdf
+
+# Local checkout of the private data repo (used to test the GH Actions flow locally)
+data-repo/
+
 # Python
 __pycache__/
 *.pyc

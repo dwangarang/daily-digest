@@ -97,6 +97,40 @@ Return a JSON array (no markdown, no other text):
         return []
 
 
+def generate_lens_framing(lens_article: dict, digest_articles: list, config: dict) -> str:
+    """
+    Apply a lens-role source's essay (e.g. Paul Graham) as an interpretive framework
+    across today's digest, rather than treating it as a competing content item.
+    Called once per digest, at most. Returns "" on failure.
+    """
+    insight = lens_article.get("insight") or lens_article.get("summary", "")
+    titles = "\n".join(f"- {a.get('title', '')}: {a.get('insight') or a.get('summary', '')}"
+                        for a in digest_articles)
+
+    prompt = f"""An essay offers a mental model. Apply that model to connect or reframe today's digest items — don't summarize the essay itself.
+
+ESSAY: {lens_article.get('title', '')}
+SOURCE: {lens_article.get('source_name', '')}
+CORE IDEA: {insight}
+
+TODAY'S DIGEST ITEMS:
+{titles}
+
+Write 2-3 sentences applying the essay's specific idea to what connects (or productively conflicts with) today's items. Name the essay's actual concept, not generic wisdom. Return plain text only, no markdown, no preamble."""
+
+    try:
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+        response = _get_client().messages.create(
+            model=model,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception as e:
+        print(f"  [!] Lens framing failed for '{lens_article.get('title', '')[:50]}': {e}")
+        return ""
+
+
 def build_opus_prompt(article: dict, expert_analyses: list, config: dict) -> str:
     """
     Build a structured deep-dive prompt for the user to paste into claude.ai (Opus).

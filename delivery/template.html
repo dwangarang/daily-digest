@@ -47,6 +47,10 @@
   .echo-event { font-weight: 600; margin-bottom: 4px; color: #333; }
   .echo-row { margin-bottom: 3px; line-height: 1.4; }
   .echo-row span { color: #7a6a9a; font-weight: 600; }
+  .lens-box { background: #f5f5f0; border-left: 3px solid #8a7a3a; padding: 12px 16px; margin-bottom: 28px; font-size: 14px; font-family: -apple-system, sans-serif; }
+  .lens-box .lens-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8a7a3a; margin-bottom: 6px; font-weight: 600; }
+  .lens-box .lens-source { font-size: 12px; color: #888; margin-top: 8px; }
+  .lens-box .lens-source a { color: #888; }
   .callbacks { background: #f0f4f8; border-radius: 6px; padding: 16px 20px; margin: 32px 0; }
   .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 12px 0; font-family: -apple-system, sans-serif; }
   .callback-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #dce4ec; }
@@ -66,6 +70,14 @@
 <div class="theme-box">
   {{ theme_description }}
 </div>
+
+{% if lens_framing %}
+<div class="lens-box">
+  <div class="lens-label">Today's Lens</div>
+  {{ lens_framing.framing }}
+  <div class="lens-source">from "<a href="{{ lens_framing.url }}">{{ lens_framing.title }}</a>" — {{ lens_framing.source_name }}</div>
+</div>
+{% endif %}
 
 {% for item in items %}
 <div class="item">
