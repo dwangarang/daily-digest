@@ -36,3 +36,6 @@ Thumbs.db
 
 # Claude Code internals
 .claude/
+
+# Internal working notes (not for the public repo)
+HANDOFF.md
