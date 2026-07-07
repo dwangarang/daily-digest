@@ -9,6 +9,7 @@
   .header h1 { font-size: 22px; margin: 0 0 4px 0; letter-spacing: -0.5px; }
   .header .date { font-size: 13px; color: #666; font-family: -apple-system, sans-serif; }
   .theme-box { background: #f0f0f0; border-left: 3px solid #333; padding: 12px 16px; margin-bottom: 28px; font-style: italic; font-size: 15px; }
+  .section-label { font-family: -apple-system, sans-serif; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #666; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin: 32px 0 20px 0; font-weight: 600; }
   .item { margin-bottom: 40px; border-bottom: 1px solid #e8e8e8; padding-bottom: 32px; }
   .item:last-of-type { border-bottom: none; }
   .item-number { font-family: -apple-system, sans-serif; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
@@ -29,6 +30,7 @@
   .expert-name { font-weight: 600; color: #333; }
   .expert-lens-key { font-size: 11px; color: #999; font-style: italic; margin-left: 4px; }
   .expert-analysis { color: #444; line-height: 1.5; display: block; margin-top: 2px; }
+  .expert-source { display: block; font-size: 11px; color: #999; font-style: italic; margin-top: 3px; }
   .takeaway { background: #f0f7f0; border-left: 3px solid #4a8a5a; padding: 10px 14px; border-radius: 0 4px 4px 0; font-size: 14px; font-family: -apple-system, sans-serif; margin-bottom: 10px; color: #2a4a2a; }
   .takeaway strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #4a8a5a; }
   .item .think { background: #f8f5e6; padding: 10px 14px; border-radius: 4px; font-size: 14px; margin-bottom: 8px; }
@@ -39,7 +41,7 @@
   .further-reading { font-size: 13px; color: #555; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
   .further-reading strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; display: block; margin-bottom: 4px; }
   .further-reading ul { margin: 0; padding-left: 16px; }
-  .further-reading li { margin-bottom: 6px; line-height: 1.4; }
+  .further-reading li { margin-bottom: 4px; line-height: 1.4; }
   .format-tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; background: #ececec; border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; font-family: -apple-system, sans-serif; }
   .historical-echo { background: #f0eef8; border-left: 3px solid #8a7ab0; padding: 10px 14px; border-radius: 0 4px 4px 0; font-size: 13px; font-family: -apple-system, sans-serif; color: #444; }
   .historical-echo-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a7ab0; font-weight: 600; margin-bottom: 6px; }
@@ -51,12 +53,26 @@
   .lens-box .lens-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8a7a3a; margin-bottom: 6px; font-weight: 600; }
   .lens-box .lens-source { font-size: 12px; color: #888; margin-top: 8px; }
   .lens-box .lens-source a { color: #888; }
+  .news-item .what-happened { font-size: 14px; color: #444; font-family: -apple-system, sans-serif; margin-bottom: 8px; }
+  .news-item .what-happened strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; }
+  .watch-for { font-size: 14px; color: #8a5a2a; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
+  .watch-for strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a5a2a; }
+  .coverage-links { font-size: 12px; color: #888; font-family: -apple-system, sans-serif; margin-bottom: 10px; }
+  .coverage-links a { color: #6a8aaa; text-decoration: none; }
   .callbacks { background: #f0f4f8; border-radius: 6px; padding: 16px 20px; margin: 32px 0; }
-  .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 12px 0; font-family: -apple-system, sans-serif; }
+  .callbacks h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #4a6a8a; margin: 0 0 6px 0; font-family: -apple-system, sans-serif; }
+  .callbacks .callbacks-hint { font-size: 12px; color: #7a94ac; font-family: -apple-system, sans-serif; margin-bottom: 12px; }
   .callback-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #dce4ec; }
   .callback-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-  .callback-item .question { font-size: 15px; font-style: italic; margin-bottom: 4px; }
-  .callback-item .context { font-size: 12px; color: #6a8aaa; font-family: -apple-system, sans-serif; }
+  .callback-item .question { font-size: 15px; margin-bottom: 4px; }
+  .callback-item .question .r-num { font-weight: 700; color: #4a6a8a; font-family: -apple-system, sans-serif; }
+  .callback-item .context { font-size: 12px; color: #6a8aaa; font-family: -apple-system, sans-serif; margin-bottom: 4px; }
+  .callback-item .grade-links { font-size: 12px; font-family: -apple-system, sans-serif; }
+  .callback-item .grade-links a { color: #6a8aaa; text-decoration: none; }
+  .answers { background: #f7f7f7; border-radius: 6px; padding: 14px 20px; margin: 24px 0; font-size: 13px; font-family: -apple-system, sans-serif; color: #555; }
+  .answers h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 0 0 10px 0; }
+  .answers .answer-row { margin-bottom: 8px; line-height: 1.5; }
+  .answers .answer-row .r-num { font-weight: 700; color: #666; }
   .footer { font-size: 12px; color: #999; text-align: center; margin-top: 32px; padding-top: 16px; border-top: 1px solid #eee; font-family: -apple-system, sans-serif; }
 </style>
 </head>
@@ -79,10 +95,14 @@
 </div>
 {% endif %}
 
+{% if items %}
+<div class="section-label">Deep Reads</div>
+{% endif %}
+
 {% for item in items %}
 <div class="item">
-  <div class="item-number">Item {{ loop.index }} of {{ items|length }}</div>
-  <h2><a href="{{ item.url }}">{{ item.title }}</a></h2>
+  <div class="item-number">Item {{ loop.index }} of {{ item_count }}</div>
+  <h2>{% if item.url and item.url != '#' %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</h2>
   <div class="source">{{ item.source_name }}{% if item.tags %} · {{ item.tags | join(', ') }}{% endif %}</div>
 
   {% if item.context %}
@@ -101,11 +121,12 @@
 
   {% if item.expert_analyses %}
   <div class="expert-lenses">
-    <div class="expert-lenses-label">Expert lenses</div>
+    <div class="expert-lenses-label">Expert lens</div>
     {% for ea in item.expert_analyses %}
     <div class="expert-entry">
       <span class="expert-name">{{ ea.expert }}</span>{% if ea.lens_key %}<span class="expert-lens-key">{{ ea.lens_key }}</span>{% endif %}
       <span class="expert-analysis">{{ ea.analysis }}</span>
+      {% if ea.source %}<span class="expert-source">— per {{ ea.source }}</span>{% endif %}
     </div>
     {% endfor %}
   </div>
@@ -128,7 +149,7 @@
   <div class="item-feedback">
     <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=save item {{ loop.index }}">📌 Save</a>
     &nbsp;·&nbsp;
-    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=more item {{ loop.index }}">👍 More like this</a>
+    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=more item {{ loop.index }}">👍 More + remember this</a>
     &nbsp;·&nbsp;
     <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=less item {{ loop.index }}">👎 Less of this</a>
     &nbsp;·&nbsp;
@@ -140,9 +161,7 @@
     <strong>Further reading</strong>
     <ul>
       {% for rec in item.further_reading %}
-      <li>
-        <em>{{ rec.title }}</em>{% if rec.author %} by {{ rec.author }}{% endif %}{% if rec.format %}<span class="format-tag">{{ rec.format }}</span>{% endif %} — {{ rec.reason }}
-      </li>
+      <li><em>{{ rec.title }}</em>{% if rec.author %} — {{ rec.author }}{% endif %}{% if rec.format %}<span class="format-tag">{{ rec.format }}</span>{% endif %}</li>
       {% endfor %}
     </ul>
   </div>
@@ -160,20 +179,85 @@
 </div>
 {% endfor %}
 
+{% if news_events %}
+<div class="section-label">News Desk</div>
+
+{% for event in news_events %}
+<div class="item news-item">
+  <div class="item-number">Item {{ items|length + loop.index }} of {{ item_count }} · News</div>
+  <h2>{{ event.headline }}</h2>
+
+  <div class="what-happened"><strong>What happened</strong> {{ event.what_happened }}</div>
+
+  <div class="insight">{{ event.analysis }}</div>
+
+  {% if event.watch_for %}
+  <div class="watch-for"><strong>Watch for</strong> {{ event.watch_for }}</div>
+  {% endif %}
+
+  {% if event.lens %}
+  <div class="expert-lenses">
+    <div class="expert-lenses-label">Expert lens</div>
+    {% for ea in event.lens %}
+    <div class="expert-entry">
+      <span class="expert-name">{{ ea.expert }}</span>
+      <span class="expert-analysis">{{ ea.analysis }}</span>
+      {% if ea.source %}<span class="expert-source">— per {{ ea.source }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if event.links %}
+  <div class="coverage-links">
+    Coverage: {% for link in event.links %}<a href="{{ link.url }}">{{ link.source }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="item-feedback">
+    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=more item {{ items|length + loop.index }}">👍 More + remember this</a>
+    &nbsp;·&nbsp;
+    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=less item {{ items|length + loop.index }}">👎 Less of this</a>
+    &nbsp;·&nbsp;
+    <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=explore item {{ items|length + loop.index }}">🔭 Explore deeper</a>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
 {% if callbacks %}
 <div class="callbacks">
   <h3>🔄 Recall Check</h3>
+  <div class="callbacks-hint">Answers at the bottom of this email. Grade yourself honestly — "missed" restarts the card; silence counts as a pass.</div>
   {% for cb in callbacks %}
   <div class="callback-item">
-    <div class="question">{{ cb.question }}</div>
-    <div class="context">From "{{ cb.article_title }}" · Review #{{ cb.difficulty_level + 1 }}</div>
+    <div class="question"><span class="r-num">R{{ loop.index }}.</span> {{ cb.question }}</div>
+    <div class="context">From "{{ cb.article_title }}" · Review #{{ cb.review_count + 1 }}</div>
+    <div class="grade-links">
+      <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=recall {{ loop.index }} got it">✓ Got it</a>
+      &nbsp;·&nbsp;
+      <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=recall {{ loop.index }} missed">✗ Missed</a>
+      &nbsp;·&nbsp;
+      <a href="mailto:{{ bot_email }}?subject=Re: Daily Digest&body=stop recall {{ loop.index }}">👎 Stop reviewing this</a>
+    </div>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
+{% if callbacks %}
+<div class="answers">
+  <h4>Recall answers</h4>
+  {% for cb in callbacks %}
+  {% if cb.answer %}
+  <div class="answer-row"><span class="r-num">R{{ loop.index }}.</span> {{ cb.answer }}</div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="footer">
-  Daily Digest · Reply with "add [url]" to queue an article · "concept: [name] | [explanation] | [topic]" to add a concept · "explore item N" for an Opus deep-dive prompt · "less [topic]" to adjust topics
+  Daily Digest · Reply with a link, PDF, or image to queue it (front of the line in your next digest) · "concept: [name] | [explanation] | [topic]" to add a concept · "explore item N" for an Opus deep-dive prompt · "less [topic]" to adjust topics
 </div>
 
 </body>

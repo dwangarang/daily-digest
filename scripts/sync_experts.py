@@ -23,7 +23,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from data.db import get_connection, save_article, update_article_processing, init_db
 from processing.summarizer import process_concept
-from processing.repetition import create_repetitions_for_digest
+from processing.repetition import enroll_article
 
 
 def already_synced(name: str) -> bool:
@@ -87,13 +87,7 @@ def main():
             context=result.get("context", ""),
             takeaway=result.get("takeaway", ""),
         )
-        create_repetitions_for_digest([{
-            "id": article_id, "title": name, "url": "",
-            "summary": result.get("insight", ""),
-            "key_takeaways": result.get("key_takeaways", []),
-            "think_about_this": result.get("think_about_this", ""),
-            "core_concept": result.get("core_concept", name),
-        }], config)
+        enroll_article(article_id, config)
         print(f"  [added] {name} ({topic})")
         added += 1
 

@@ -2,15 +2,17 @@
 
 A personal learning digest that curates, summarizes, and reinforces a stream of ideas and frameworks — delivered to your inbox every morning.
 
-**What it does:** Pulls content from RSS feeds, APIs, and web pages → summarizes each piece via Claude → selects 3-5 thematically connected items → sends a formatted email with "think about this" questions and spaced repetition callbacks from previous digests.
+**What it does:** Pulls content from RSS feeds, APIs, web pages, and anything you email it (links, PDFs, images) → analyzes each piece via Claude → sends a short morning email: a couple of thematically connected deep reads, an in-depth take on the day's most relevant news events, and a recall check on concepts you chose to remember.
 
 **What it replaces:** Anki, manual newsletter triage, and the guilt of 47 unread tabs.
 
 ## Features
 
 - **Thematic curation** — each digest has a connecting thread, not random items
-- **Spaced repetition** — callback questions from past digests, with increasing difficulty
-- **Reply-to-interact** — save items, adjust topics, or add URLs by replying to the email
+- **News Desk** — the day's few genuinely relevant events, analyzed in depth with web-search enrichment (free sources only; zero events on slow days, never filler)
+- **Opt-in spaced repetition** — 👍 an item and it becomes an atomic Q&A card that resurfaces on an interval ladder; grade yourself by reply, retire cards you're done with
+- **Reply-to-interact, multi-modal** — reply with commands, links, PDFs, or images; your submissions jump the queue into the next digest
+- **Grounded expert lenses** — every expert-lens claim cites a real source (book/memo/talk) or it doesn't ship
 - **Topic balancing** — prevents any one topic from dominating across days
 - **Evergreen library** — load entire essay collections (Paul Graham, Howard Marks) and serve them over time
 
@@ -141,11 +143,17 @@ Reply to any digest email with:
 
 | Command | Example | Effect |
 |---------|---------|--------|
+| 👍 an item | `more item 2` | Boosts similar content **and enrolls the concept as a recall card** |
+| 👎 an item | `less item 2` | Reduces similar content |
 | Save an item | `save item 2` | Re-surfaces item 2 in a future digest |
-| Positive signal | `more like this` or `👍` | Boosts similar content |
-| Negative signal | `less of this` or `👎` | Reduces similar content |
+| Explore deeper | `explore item 2` | Emails back a deep-dive prompt to paste into claude.ai |
+| Grade a recall card | `recall 1 missed` | Resets that card to the shortest interval (`recall 1 got it` confirms; silence counts as a pass) |
+| Retire a recall card | `stop recall 1` | Removes it from the review queue permanently |
 | Topic adjustment | `less crypto` or `more GTM` | Adjusts topic weights |
-| Add a URL | `add https://example.com/article` | Queues the URL for a future digest |
+| Add a URL | `add https://example.com/article` or just paste a link | Fetched, analyzed, and **guaranteed a slot in your next digest** |
+| Add a concept | `concept: OODA loops \| my explanation \| General Interest` | Processed and enrolled for recall |
+
+You can also **attach files** — a PDF, an image (chart, slide, article screenshot), or a text file. Attachments are extracted (PDFs via text extraction, images via Claude vision), analyzed, and prioritized into your next digest, same as links. Forwarding an email to the bot works too; matching is by sender, not subject line.
 
 ### Adding sources
 
@@ -180,7 +188,7 @@ Edit `config.yaml` and add entries under `sources`:
 
 ### Expert lenses
 
-Add named analytical lenses under `experts` in `config.yaml` — 2-3 relevant ones get applied to each digest article, matched by domain overlap with the article's tags:
+Add named analytical lenses under `experts` in `config.yaml` — the most relevant one gets applied to each digest article, matched by domain overlap with the article's tags. Because these claims are attributed to real people, every rendered lens must cite the specific source (book chapter, memo, talk) where the expert articulated the concept, at high confidence — otherwise it's dropped and the section simply doesn't appear (tune via the `expert_lens` config block):
 
 ```yaml
 experts:

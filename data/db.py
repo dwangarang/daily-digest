@@ -110,6 +110,15 @@ def init_db():
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed BOOLEAN DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS digest_callbacks (
+            digest_id INTEGER,
+            position INTEGER,
+            repetition_id INTEGER,
+            PRIMARY KEY (digest_id, position),
+            FOREIGN KEY (digest_id) REFERENCES digests(id),
+            FOREIGN KEY (repetition_id) REFERENCES repetitions(id)
+        );
     """)
 
     # Migrations: add new columns to existing databases
@@ -125,9 +134,19 @@ def init_db():
         ("historical_analog", "TEXT"),
         ("context", "TEXT"),
         ("takeaway", "TEXT"),
+        ("priority", "INTEGER DEFAULT 0"),
     ]:
         try:
             conn.execute(f"ALTER TABLE articles ADD COLUMN {col} {definition}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    for col, definition in [
+        ("answer", "TEXT"),
+        ("retired", "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE repetitions ADD COLUMN {col} {definition}")
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -204,11 +223,66 @@ def update_article_processing(article_id: str, summary: str, takeaways: list,
     conn.close()
 
 
-def get_unsent_articles(limit: int = 50) -> list:
+def get_article(article_id: str) -> dict | None:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM articles WHERE id = ?", (article_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def save_processed_result(article_id: str, result: dict):
+    """Persist all Claude-generated fields for an article from a processing result."""
+    insight = result.get("insight", "")
+    update_article_processing(
+        article_id=article_id,
+        summary=insight,
+        takeaways=result.get("key_takeaways", []),
+        tags=result.get("tags", []),
+        relevance_score=result.get("relevance_score", 0.0),
+        think_about_this=result.get("think_about_this", ""),
+        core_concept=result.get("core_concept", ""),
+        related_search_terms=[],
+        insight=insight,
+        so_what=result.get("so_what", ""),
+        contrarian_angle=result.get("contrarian_angle", ""),
+        further_reading=result.get("further_reading", []),
+        think_framework=result.get("think_framework", ""),
+        historical_analog=result.get("historical_analog"),
+        context=result.get("context", ""),
+        takeaway=result.get("takeaway", ""),
+    )
+
+
+def set_article_priority(article_id: str, priority: int = 1):
+    conn = get_connection()
+    conn.execute("UPDATE articles SET priority = ? WHERE id = ?", (priority, article_id))
+    conn.commit()
+    conn.close()
+
+
+def get_priority_unsent(limit: int = 2) -> list:
+    """Reader-submitted articles (replies, attachments, URLs) awaiting a digest slot."""
     conn = get_connection()
     rows = conn.execute("""
         SELECT a.* FROM articles a
+        WHERE a.priority = 1 AND a.processed_at IS NOT NULL
+        AND a.id NOT IN (SELECT article_id FROM digest_articles)
+        ORDER BY a.ingested_at ASC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_unsent_articles(limit: int = 50) -> list:
+    conn = get_connection()
+    # Excluded from the deep-read pool:
+    # - News Desk: events are analyzed for the digest they were selected for and go stale
+    # - Expert Roster: synced for the recall queue and lens duty, not as digest content
+    rows = conn.execute("""
+        SELECT a.* FROM articles a
         WHERE a.processed_at IS NOT NULL
+        AND a.source_name NOT IN ('News Desk', 'Expert Roster')
         AND a.id NOT IN (SELECT article_id FROM digest_articles)
         ORDER BY a.relevance_score DESC
         LIMIT ?
@@ -280,14 +354,25 @@ def get_most_recent_digest_articles() -> list:
 # ---- Repetition helpers ----
 
 def save_repetition(article_id: str, concept: str, question: str,
-                     next_review_date: date):
+                     next_review_date: date, answer: str = ""):
     conn = get_connection()
     conn.execute("""
-        INSERT INTO repetitions (article_id, concept, question, next_review_date)
-        VALUES (?, ?, ?, ?)
-    """, (article_id, concept, question, next_review_date.isoformat()))
+        INSERT INTO repetitions (article_id, concept, question, answer, next_review_date)
+        VALUES (?, ?, ?, ?, ?)
+    """, (article_id, concept, question, answer, next_review_date.isoformat()))
     conn.commit()
     conn.close()
+
+
+def repetition_exists(article_id: str) -> bool:
+    """True if the article already has an active (non-retired) repetition card."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT 1 FROM repetitions WHERE article_id = ? AND retired = 0 LIMIT 1",
+        (article_id,)
+    ).fetchone()
+    conn.close()
+    return row is not None
 
 
 def get_due_repetitions(as_of: date = None, limit: int = 3) -> list:
@@ -297,12 +382,57 @@ def get_due_repetitions(as_of: date = None, limit: int = 3) -> list:
     rows = conn.execute("""
         SELECT r.*, a.title, a.summary, a.url FROM repetitions r
         JOIN articles a ON r.article_id = a.id
-        WHERE r.next_review_date <= ?
+        WHERE r.next_review_date <= ? AND r.retired = 0
         ORDER BY r.next_review_date ASC, r.review_count ASC
         LIMIT ?
     """, (as_of.isoformat(), limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def retire_repetition(repetition_id: int):
+    """Reader gave 👎 on a resurfaced card — stop reviewing it, keep the history."""
+    conn = get_connection()
+    conn.execute("UPDATE repetitions SET retired = 1 WHERE id = ?", (repetition_id,))
+    conn.commit()
+    conn.close()
+
+
+def reset_repetition(repetition_id: int, first_interval_days: int):
+    """Reader graded a card 'missed' — restart it at the shortest interval."""
+    conn = get_connection()
+    conn.execute("""
+        UPDATE repetitions
+        SET review_count = 0,
+            difficulty_level = 1,
+            next_review_date = date('now', ?)
+        WHERE id = ?
+    """, (f"+{first_interval_days} days", repetition_id))
+    conn.commit()
+    conn.close()
+
+
+def save_digest_callbacks(digest_id: int, repetition_ids: list):
+    """Record which recall cards were shown at which position (R1, R2, ...)."""
+    conn = get_connection()
+    for pos, rep_id in enumerate(repetition_ids, start=1):
+        conn.execute("""
+            INSERT OR REPLACE INTO digest_callbacks (digest_id, position, repetition_id)
+            VALUES (?, ?, ?)
+        """, (digest_id, pos, rep_id))
+    conn.commit()
+    conn.close()
+
+
+def get_latest_digest_callbacks() -> dict:
+    """Return {position: repetition_id} for the most recently sent digest."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT dc.position, dc.repetition_id FROM digest_callbacks dc
+        WHERE dc.digest_id = (SELECT id FROM digests ORDER BY sent_at DESC LIMIT 1)
+    """).fetchall()
+    conn.close()
+    return {r["position"]: r["repetition_id"] for r in rows}
 
 
 def advance_repetition(repetition_id: int, intervals: list):

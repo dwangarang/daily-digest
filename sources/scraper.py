@@ -103,6 +103,11 @@ def fetch_evergreen_source(source: dict) -> list:
 
 def fetch_full_article(url: str) -> str:
     """Fetch full text content from an article URL. Used by the summarizer."""
+    return fetch_article_with_title(url)[1]
+
+
+def fetch_article_with_title(url: str) -> tuple[str, str]:
+    """Fetch (page title, full text) from an article URL."""
     try:
         verify = "paulgraham.com" not in url
         resp = requests.get(url, timeout=15,
@@ -111,12 +116,14 @@ def fetch_full_article(url: str) -> str:
         resp.raise_for_status()
     except Exception as e:
         print(f"  [!] Failed to fetch article at {url}: {e}")
-        return ""
+        return "", ""
 
     soup = BeautifulSoup(resp.text, "html.parser")
+    title = soup.title.get_text(strip=True) if soup.title else ""
+
     for tag in soup(["nav", "footer", "script", "style", "header", "aside"]):
         tag.decompose()
 
     article = soup.find("article") or soup.find("main") or soup.find("body")
     text = article.get_text(separator="\n", strip=True) if article else ""
-    return text[:15000]
+    return title, text[:15000]

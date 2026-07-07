@@ -39,3 +39,5 @@ Thumbs.db
 
 # Internal working notes (not for the public repo)
 HANDOFF.md
+data/digest.db-shm
+data/digest.db-wal

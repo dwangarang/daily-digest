@@ -28,7 +28,7 @@ def _parse_json_field(value, fallback=None):
     return fallback
 
 
-def render_email(digest: dict, callbacks: list, config: dict) -> str:
+def render_email(digest: dict, callbacks: list, news_events: list, config: dict) -> str:
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template("template.html")
 
@@ -81,8 +81,9 @@ def render_email(digest: dict, callbacks: list, config: dict) -> str:
         date=date.today().strftime("%B %d, %Y"),
         theme=digest.get("theme", "Today's Reads"),
         theme_description=digest.get("theme_description", ""),
-        item_count=len(items),
+        item_count=len(items) + len(news_events or []),
         items=items,
+        news_events=news_events or [],
         callbacks=callbacks,
         lens_framing=lens_framing,
         bot_email=os.environ.get("GMAIL_ADDRESS", ""),

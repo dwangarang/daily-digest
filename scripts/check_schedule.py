@@ -9,7 +9,13 @@ schedule.timezone in config.yaml to your current IANA timezone (e.g.
 "Asia/Tokyo") and commit/push — no code or cron change needed.
 
 Also guards against double-sends: if a digest already went out today (in the
-target timezone), it will not fire again even if the cron window matches twice.
+target timezone), it will not fire again even if multiple cron firings qualify.
+
+GitHub Actions cron is throttled and unreliable — firings routinely arrive
+hours late or get skipped entirely. So the gate is NOT "within a window of
+send_time" (a delayed cron misses the window and the digest silently never
+sends). It is "at or after send_time and not yet sent today": the first firing
+that lands after the target time sends, whenever it happens to run.
 
 Usage: python scripts/check_schedule.py
 Exits 0 always; writes should_run=true/false to $GITHUB_OUTPUT if set, and to stdout.
@@ -23,8 +29,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import yaml
-
-WINDOW_MINUTES = 25  # keep < 30 so two consecutive hourly cron firings can't both match
 
 
 def already_sent_today(tz: ZoneInfo, now: datetime) -> bool:
@@ -60,12 +64,12 @@ def main():
     target_hour, target_minute = (int(x) for x in send_time.split(":"))
     target = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
 
-    within_window = abs((now - target).total_seconds()) <= WINDOW_MINUTES * 60
-    should_run = within_window and not already_sent_today(tz, now)
+    past_target = now >= target
+    should_run = past_target and not already_sent_today(tz, now)
 
     print(f"  Now: {now.isoformat()} ({tz_name})")
     print(f"  Target: {target.isoformat()}")
-    print(f"  Within window: {within_window}")
+    print(f"  At or past target: {past_target}")
     print(f"  Already sent today: {already_sent_today(tz, now)}")
     print(f"  should_run: {should_run}")
 

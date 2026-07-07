@@ -24,9 +24,10 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from data.db import (
     init_db, article_exists, save_article, update_article_processing,
-    get_unprocessed_articles, save_digest,
+    get_unprocessed_articles, save_digest, save_digest_callbacks,
     get_pending_manual_items, mark_manual_processed,
     get_pending_concepts, mark_concept_processed,
+    save_processed_result, set_article_priority,
 )
 from sources.rss import fetch_rss_source
 from sources.api import fetch_api_source
@@ -34,8 +35,9 @@ from sources.scraper import fetch_scrape_source, fetch_evergreen_source, fetch_f
 from processing.summarizer import process_articles_batch, process_article, process_concept
 from processing.analyst import generate_expert_analyses, build_opus_prompt, generate_lens_framing
 from processing.curator import curate_digest
+from processing.news_desk import generate_news_desk
 from processing.repetition import (
-    create_repetitions_for_digest, get_callback_questions, mark_callbacks_shown
+    enroll_article, get_callback_questions, mark_callbacks_shown
 )
 from delivery.sender import render_email, send_email
 from delivery.reply_parser import check_replies
@@ -90,31 +92,6 @@ def _passes_keyword_filter(article: dict, source_topics: list) -> bool:
         if any(kw in text for kw in keywords):
             return True
     return False
-
-
-# ---- Shared helper ----
-
-def _save_processed_article(article_id: str, result: dict):
-    """Persist all Claude-generated fields for an article."""
-    insight = result.get("insight", "")
-    update_article_processing(
-        article_id=article_id,
-        summary=insight,
-        takeaways=result.get("key_takeaways", []),
-        tags=result.get("tags", []),
-        relevance_score=result.get("relevance_score", 0.0),
-        think_about_this=result.get("think_about_this", ""),
-        core_concept=result.get("core_concept", ""),
-        related_search_terms=[],
-        insight=insight,
-        so_what=result.get("so_what", ""),
-        contrarian_angle=result.get("contrarian_angle", ""),
-        further_reading=result.get("further_reading", []),
-        think_framework=result.get("think_framework", ""),
-        historical_analog=result.get("historical_analog"),
-        context=result.get("context", ""),
-        takeaway=result.get("takeaway", ""),
-    )
 
 
 # ---- Pipeline stages ----
@@ -175,6 +152,7 @@ def stage_ingest(config: dict) -> int:
             }
             if not article_exists(article_id):
                 save_article(article)
+                set_article_priority(article_id, 1)
                 new_count += 1
         mark_manual_processed(item["id"])
 
@@ -199,14 +177,11 @@ def stage_ingest(config: dict) -> int:
             }
             if not article_exists(article_id):
                 save_article(article)
-                _save_processed_article(article_id, result)
-                create_repetitions_for_digest([{
-                    "id": article_id, "title": item["name"], "url": "",
-                    "summary": result.get("insight", ""),
-                    "key_takeaways": result.get("key_takeaways", []),
-                    "think_about_this": result.get("think_about_this", ""),
-                    "core_concept": result.get("core_concept", item["name"]),
-                }], config)
+                save_processed_result(article_id, result)
+                # Reader explicitly asked for this: guaranteed digest slot +
+                # enrolled in the recall queue (explicit add = opt-in signal).
+                set_article_priority(article_id, 1)
+                enroll_article(article_id, config)
                 new_count += 1
         mark_concept_processed(item["id"])
 
@@ -231,7 +206,7 @@ def stage_process(config: dict, limit: int = 25) -> int:
     for article in articles:
         result = results.get(article["id"])
         if result:
-            _save_processed_article(article["id"], result)
+            save_processed_result(article["id"], result)
             processed += 1
         else:
             update_article_processing(
@@ -261,12 +236,11 @@ def stage_sweep(config: dict):
 
 
 def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
-    """Curate a digest and send it. Returns True if sent successfully."""
+    """Curate a digest and send it. Returns True if sent successfully.
 
-    print("  Checking for email replies...")
-    actions = check_replies(config)
-    if actions:
-        print(f"  Processed {len(actions)} reply actions")
+    Replies are checked in stage_replies() at the start of the pipeline (before
+    ingest), so reader-submitted links/attachments make it into today's digest.
+    """
 
     print("  Curating today's digest...")
     digest = curate_digest(config)
@@ -308,8 +282,11 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
         print(f"  Applying lens: {lens_article['title'][:50]}")
         digest["lens_framing"] = generate_lens_framing(lens_article, digest["articles"], config)
 
+    print("  Building news desk...")
+    news_events = generate_news_desk(config)
+
     print("  Rendering email...")
-    html = render_email(digest, callbacks, config)
+    html = render_email(digest, callbacks, news_events, config)
 
     if dry_run:
         preview_path = Path(__file__).parent / "data" / "preview.html"
@@ -323,19 +300,34 @@ def stage_curate_and_send(config: dict, dry_run: bool = False) -> bool:
     success = send_email(html, digest)
 
     if success:
+        # Positions must match the email's item numbering: deep reads first,
+        # then news events, lens article last (it carries no item number).
         article_ids = [a["id"] for a in digest["articles"]]
+        article_ids += [e["id"] for e in news_events]
         if lens_article:
             article_ids.append(lens_article["id"])
-        save_digest(digest["theme"], digest.get("theme_description", ""), article_ids)
-        create_repetitions_for_digest(digest["articles"], config)
+        digest_id = save_digest(digest["theme"], digest.get("theme_description", ""),
+                                article_ids)
 
+        # Recall cards: record which card was R1/R2 (grading replies reference
+        # these positions), then advance intervals (silence = implicit pass).
         callback_ids = [cb["repetition_id"] for cb in callbacks]
         if callback_ids:
+            save_digest_callbacks(digest_id, callback_ids)
             mark_callbacks_shown(callback_ids, config)
 
         print("  [✓] Digest pipeline complete!")
 
     return success
+
+
+def stage_replies(config: dict) -> list:
+    """Check the inbox for reader replies (feedback, grades, links, attachments)."""
+    print("  Checking for email replies...")
+    actions = check_replies(config)
+    if actions:
+        print(f"  Processed {len(actions)} reply action(s)")
+    return actions
 
 
 def stage_add_concept(config: dict):
@@ -382,14 +374,9 @@ def stage_add_concept(config: dict):
         "id": article_id, "source_name": source_label,
         "title": concept_name, "url": "", "raw_content": explanation,
     })
-    _save_processed_article(article_id, result)
-    create_repetitions_for_digest([{
-        "id": article_id, "title": concept_name, "url": "",
-        "summary": result.get("insight", ""),
-        "key_takeaways": result.get("key_takeaways", []),
-        "think_about_this": result.get("think_about_this", ""),
-        "core_concept": result.get("core_concept", concept_name),
-    }], config)
+    save_processed_result(article_id, result)
+    set_article_priority(article_id, 1)
+    enroll_article(article_id, config)
 
     intervals = config.get("repetition", {}).get("intervals", [1])
     print(f"\n  [✓] '{concept_name}' added.")
@@ -469,19 +456,9 @@ def stage_add_file(config: dict):
     result = process_article(article, config)
 
     if result:
-        _save_processed_article(article_id, result)
-        create_repetitions_for_digest([{
-            "id": article_id,
-            "title": title,
-            "url": "",
-            "summary": result.get("insight", ""),
-            "key_takeaways": result.get("key_takeaways", []),
-            "think_about_this": result.get("think_about_this", ""),
-            "core_concept": result.get("core_concept", title),
-        }], config)
-        print(f"\n  [✓] '{title}' added to digest pool and spaced repetition queue.")
-        if result.get("think_about_this"):
-            print(f"      First question: {result['think_about_this']}")
+        save_processed_result(article_id, result)
+        print(f"\n  [✓] '{title}' added to the digest pool.")
+        print("      (Recall is opt-in: 👍 it when it appears in a digest to enroll it.)")
     else:
         print("  [!] Processing failed.")
 
@@ -511,19 +488,25 @@ def main():
         stage_sweep(config)
 
     elif mode == "digest":
-        print("[1/3] Ingesting new content...")
+        # Replies first: attachments/links the reader sent overnight are
+        # processed with priority and make it into TODAY's digest.
+        print("[1/4] Checking replies...")
+        stage_replies(config)
+        print("\n[2/4] Ingesting new content...")
         stage_ingest(config)
-        print("\n[2/3] Processing articles...")
+        print("\n[3/4] Processing articles...")
         stage_process(config)
-        print("\n[3/3] Curating and sending digest...")
+        print("\n[4/4] Curating and sending digest...")
         stage_curate_and_send(config)
 
     elif mode == "test":
-        print("[1/3] Ingesting new content...")
+        print("[1/4] Checking replies...")
+        stage_replies(config)
+        print("\n[2/4] Ingesting new content...")
         stage_ingest(config)
-        print("\n[2/3] Processing articles...")
+        print("\n[3/4] Processing articles...")
         stage_process(config)
-        print("\n[3/3] Curating digest (DRY RUN)...")
+        print("\n[4/4] Curating digest (DRY RUN)...")
         stage_curate_and_send(config, dry_run=True)
 
     elif mode == "replies":

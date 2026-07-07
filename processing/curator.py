@@ -13,7 +13,10 @@ import os
 import json
 from collections import Counter
 from anthropic import Anthropic
-from data.db import get_unsent_articles, get_recent_digest_topics, get_recent_feedback
+from data.db import (
+    get_unsent_articles, get_recent_digest_topics, get_recent_feedback,
+    get_priority_unsent,
+)
 
 client = None
 
@@ -102,21 +105,42 @@ def curate_digest(config: dict) -> dict | None:
     items_per_digest = config.get("schedule", {}).get("items_per_digest", 4)
     topics = config.get("topics", [])
 
+    # Reader-submitted items (reply attachments, links, concepts) are guaranteed
+    # slots — they were explicitly asked for and never compete on relevance_score.
+    priority_articles = get_priority_unsent(limit=items_per_digest)
+    priority_ids = {a["id"] for a in priority_articles}
+    open_slots = items_per_digest - len(priority_articles)
+
     # Sources tagged role: "lens" (e.g. Paul Graham essays) supply an interpretive
     # framework applied across the digest — they don't compete for a content slot.
     lens_source_names = {s["name"] for s in config.get("sources", []) if s.get("role") == "lens"}
 
     raw_candidates = get_unsent_articles(limit=60)
     lens_raw = [a for a in raw_candidates if a.get("source_name") in lens_source_names]
-    signal_raw = [a for a in raw_candidates if a.get("source_name") not in lens_source_names]
+    signal_raw = [a for a in raw_candidates
+                  if a.get("source_name") not in lens_source_names
+                  and a["id"] not in priority_ids]
 
     # Hard dedup: one article per source before anything else
     candidates = _dedup_by_source(signal_raw)
     lens_article = _dedup_by_source(lens_raw)[0] if lens_raw else None
 
-    if len(candidates) < items_per_digest:
-        print(f"  [!] Only {len(candidates)} unique-source candidates. Need {items_per_digest}.")
-        if len(candidates) < 2:
+    if priority_articles:
+        print(f"  [Priority] {len(priority_articles)} reader-submitted item(s) get "
+              f"guaranteed slots: {[a['title'][:40] for a in priority_articles]}")
+
+    if open_slots <= 0:
+        return {
+            "theme": "Your Reading List",
+            "theme_description": "Everything you sent in, front of the line.",
+            "articles": priority_articles[:items_per_digest],
+            "further_reading_queries": [],
+            "lens_article": lens_article,
+        }
+
+    if len(candidates) < open_slots:
+        print(f"  [!] Only {len(candidates)} unique-source candidates. Need {open_slots}.")
+        if len(candidates) < 2 and not priority_articles:
             return None
 
     recent_topics = get_recent_digest_topics(days=5)
@@ -163,8 +187,15 @@ Rules:
 - selected_indices: index values from the candidates list
 - presentation_order: same indices reordered for narrative flow (reads top-to-bottom as a coherent arc)"""
 
-    user_text = f"""Select exactly {items_per_digest} articles:
+    must_include_text = ""
+    if priority_articles:
+        must_include_text = f"""
+ALREADY SELECTED (reader-submitted, will open the digest — pick candidates that cohere with them):
+{json.dumps([{"title": a["title"], "insight": (a.get("insight") or "")[:150]} for a in priority_articles], indent=2)}
+"""
 
+    user_text = f"""Select exactly {open_slots} articles:
+{must_include_text}
 CANDIDATES:
 {json.dumps(candidate_summaries, indent=2)}
 
@@ -207,7 +238,7 @@ Return ONLY valid JSON. No prose, no reasoning, no markdown. Your entire respons
         return {
             "theme": selection["theme"],
             "theme_description": selection.get("theme_description", ""),
-            "articles": ordered_articles,
+            "articles": priority_articles + ordered_articles[:open_slots],
             "further_reading_queries": [],
             "lens_article": lens_article,
         }
@@ -215,11 +246,11 @@ Return ONLY valid JSON. No prose, no reasoning, no markdown. Your entire respons
     except Exception as e:
         print(f"  [!] Curation failed: {e}")
         fallback = sorted(candidates, key=lambda a: a.get("relevance_score", 0),
-                          reverse=True)[:items_per_digest]
+                          reverse=True)[:open_slots]
         return {
             "theme": "Today's Top Reads",
             "theme_description": "Selected by relevance score.",
-            "articles": fallback,
+            "articles": priority_articles + fallback,
             "further_reading_queries": [],
             "lens_article": lens_article,
         }

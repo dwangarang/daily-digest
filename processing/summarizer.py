@@ -32,6 +32,27 @@ FRAMEWORKS = [
     ("Keynes — Beauty Contest",      "markets price what others think others think; second/third-order beliefs dominate short run"),
 ]
 
+# Rhetorical opening moves for the insight field. One is assigned per article
+# (deterministically, by article id) so consecutive items don't share the same
+# opening structure and no single formula becomes the house style.
+OPENING_MOVES = [
+    "MECHANISM-FIRST: open by naming the causal mechanism at work, then what it produces",
+    "CONSEQUENCE-FIRST: open with the concrete downstream effect, then trace it back",
+    "TENSION-FIRST: open with the specific tension or tradeoff the piece exposes",
+    "NUMBER-FIRST: open with the load-bearing number or concrete fact, then what it implies",
+    "ACTOR-FIRST: open with who gains or loses and why, then generalize",
+]
+
+
+def assigned_opening_move(article_id: str) -> str:
+    """Deterministically rotate opening structures so items vary."""
+    try:
+        idx = int(str(article_id)[:8], 16) % len(OPENING_MOVES)
+    except ValueError:
+        idx = sum(ord(c) for c in str(article_id)) % len(OPENING_MOVES)
+    return OPENING_MOVES[idx]
+
+
 client = None
 
 
@@ -67,8 +88,8 @@ Return a JSON object with this exact structure (no markdown fences, no other tex
 {{
     "context": "1-2 neutral sentences orienting the reader: what is this piece, who wrote/published it, and what is its central claim or event? No opinion here — just enough to know what you're about to evaluate.",
     "insight": "The single non-obvious or contrarian takeaway. What would a smart person miss on first read? What's the second-order implication? Direct, opinionated voice. 2-3 sentences max.",
-    "so_what": "One sentence connecting this insight to the reader's professional context — AI strategy, enterprise SaaS GTM, or China-ASEAN markets.",
-    "contrarian_angle": "One sentence: the strongest counterargument to the article's thesis, or the thing most readers would get wrong about it.",
+    "so_what": "One sentence: the piece's most natural implication. See rules — do NOT force it through the reader's professional domains.",
+    "contrarian_angle": "One sentence: the strongest counterargument to the article's thesis, or the thing most readers would get wrong about it. Empty string if none is genuinely strong — see rules.",
     "key_takeaways": ["takeaway 1", "takeaway 2", "takeaway 3"],
     "tags": ["tag1"],
     "relevance_score": 0.75,
@@ -93,8 +114,9 @@ Return a JSON object with this exact structure (no markdown fences, no other tex
 Rules:
 - context: purely neutral orientation. No opinion. If the reader doesn't know this source/author, this sentence tells them.
 - insight: opinionated, not neutral. Second-order thinking, not first read.
-- so_what: name a specific domain the reader cares about — not generic "business"
-- contrarian_angle: steelman the opposing view or surface the common misreading
+- insight STRUCTURE: use the OPENING MOVE named in the user message. BANNED as an opener (and as a crutch anywhere): the inversion template "the real X isn't Y, it's Z" / "this isn't about X, it's about Y" in any phrasing. If you catch yourself writing it, restructure the sentence around the assigned opening move instead.
+- so_what: find the piece's OWN most natural implication first — the consequence a thoughtful generalist would draw. Connect it to the reader's domains (AI strategy, SaaS GTM, China-ASEAN) ONLY when that connection is genuine and specific. A 2008 credit memo's natural implication is about risk and cycles, not SaaS GTM — forcing every piece through one professional frame flattens what's distinct about it. Never stretch.
+- contrarian_angle: steelman the opposing view or surface the common misreading — but ONLY if a genuinely strong one exists. Return "" rather than a manufactured counterpoint. An absent section signals more than a weak one.
 - tags: pick 1-2 from the available topic tags only
 - relevance_score: 0.0-1.0 based on match with reader profile
 - think_about_this: MUST use one framework from the FRAMEWORK LENSES list as the cross-domain lens. Pick the most apt one — don't default to Marks for everything.
@@ -102,7 +124,7 @@ Rules:
 - further_reading: include exactly 3 recommendations — one academic/research piece, one practitioner piece (memo, blog post, interview, or talk), one long-form essay or book chapter. No two from the same author. Be specific: "Howard Marks' October 2001 memo 'You Can't Predict. You Can Prepare.'" not "a Howard Marks memo". Format values: memo | essay | research paper | talk | interview | blog post | book chapter
 - core_concept: a standalone insight, not a reference to the article
 - takeaway: one concrete thing to do or believe differently. Not a summary. Actionable.
-- historical_analog: ONLY return non-null when there is a genuine structural mechanism parallel (medium or high confidence). Return null if no strong analog exists — do not force one. The key_difference must be stated honestly even when the analog is strong."""
+- historical_analog: ONLY return non-null when there is a genuine structural mechanism parallel at HIGH confidence — the mechanism must map, not the surface. Return null otherwise; most articles should have null. The key_difference must be stated honestly even when the analog is strong."""
 
 
 def _fetch_content(article: dict) -> str:
@@ -145,7 +167,8 @@ def process_articles_batch(articles: list, config: dict) -> dict:
         user_text = (
             f"Analyze this article:\n\n"
             f"TITLE: {article['title']}\n"
-            f"SOURCE: {article['source_name']}\n\n"
+            f"SOURCE: {article['source_name']}\n"
+            f"OPENING MOVE for the insight field: {assigned_opening_move(article['id'])}\n\n"
             f"CONTENT:\n{content[:8000]}"
         )
         requests.append({
@@ -224,7 +247,8 @@ def process_article(article: dict, config: dict) -> dict | None:
     user_text = (
         f"Analyze this article:\n\n"
         f"TITLE: {article['title']}\n"
-        f"SOURCE: {article['source_name']}\n\n"
+        f"SOURCE: {article['source_name']}\n"
+        f"OPENING MOVE for the insight field: {assigned_opening_move(article.get('id', article['title']))}\n\n"
         f"CONTENT:\n{content[:8000]}"
     )
 

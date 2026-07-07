@@ -27,7 +27,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from data.db import article_exists, save_article, update_article_processing, init_db
 from processing.summarizer import process_article
-from processing.repetition import create_repetitions_for_digest
 
 PDF_PATH = Path(__file__).parent.parent / "data" / "the-complete-collection.pdf"
 YEAR_CUTOFF_ANCHOR_TITLE = "The Aviary"  # first memo at/after the 2006 cutoff
@@ -110,13 +109,8 @@ def main():
             context=result.get("context", ""),
             takeaway=result.get("takeaway", ""),
         )
-        create_repetitions_for_digest([{
-            "id": article_id, "title": title, "url": "",
-            "summary": result.get("insight", ""),
-            "key_takeaways": result.get("key_takeaways", []),
-            "think_about_this": result.get("think_about_this", ""),
-            "core_concept": result.get("core_concept", title),
-        }], config)
+        # No repetition enrollment: recall is opt-in (👍 a memo when it appears
+        # in a digest). Bulk-enrolling 100+ memos floods the queue for months.
         added += 1
 
     print(f"\nDone. {added} added, {skipped} already present, {failed} failed.")

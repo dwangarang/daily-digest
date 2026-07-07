@@ -43,14 +43,30 @@ def _select_experts(article: dict, experts: list) -> list:
     return selected
 
 
+CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
 def generate_expert_analyses(article: dict, config: dict) -> list:
     """
-    For a single article, generate analysis through 2-3 relevant expert lenses.
-    Called at digest-send time (synchronous). Returns list of {expert, analysis}.
+    For a single article, generate analysis through the most relevant expert
+    lens(es), each grounded in a cited real source. Called at digest-send time
+    (synchronous). Returns list of {expert, analysis, source, confidence}.
+
+    Grounding rules (these lenses are attributed to real named people, and
+    spaced repetition can encode them into long-term memory — a confidently
+    drifted claim is worse than no lens):
+    - every claim must cite a specific source where the expert articulated it
+    - a confidence field is required; anything below the configured threshold
+      is dropped
+    - default is 1 lens per item: one grounded lens beats three synthesized ones
     """
     experts = config.get("experts", [])
     if not experts:
         return []
+
+    lens_config = config.get("expert_lens", {})
+    max_per_item = lens_config.get("max_per_item", 1)
+    min_confidence = CONFIDENCE_RANK.get(lens_config.get("min_confidence", "high"), 2)
 
     selected = _select_experts(article, experts)
     if not selected:
@@ -61,21 +77,28 @@ def generate_expert_analyses(article: dict, config: dict) -> list:
     )
     insight = article.get("insight") or article.get("summary", "")
 
-    prompt = f"""Apply each expert's documented framework to this article's core insight. Reference their specific documented concepts by name — not generic wisdom dressed in their name.
+    prompt = f"""From the candidate experts below, apply AT MOST {max_per_item} whose documented framework genuinely illuminates this article's core insight.
 
 ARTICLE: {article.get('title', '')}
 SOURCE: {article.get('source_name', '')}
 CORE INSIGHT: {insight}
 CONTRARIAN ANGLE: {article.get('contrarian_angle', '')}
 
-EXPERT FRAMEWORKS:
+CANDIDATE EXPERTS:
 {expert_list}
 
-Return a JSON array (no markdown, no other text):
+GROUNDING REQUIREMENTS — these are hard rules:
+1. Every analysis must apply a concept the expert actually articulated, named explicitly, with a citation to the specific real source where they articulated it (book with chapter/concept, memo title + year, named talk/interview, essay title). No generic wisdom dressed in their name.
+2. If you cannot ground an application in a real, citable source, OMIT that expert. Returning [] is a valid and often correct answer — an absent lens is better than a synthesized one, because these claims are attributed to real people.
+3. confidence means: high = you are certain the expert articulated this exact concept in the cited source; medium = the concept is genuinely theirs but you are unsure of the exact source; low = extrapolation beyond what they wrote. Be honest — do not inflate.
+
+Return a JSON array (no markdown, no other text), at most {max_per_item} entries:
 [
   {{
     "expert": "Expert Name",
-    "analysis": "2-3 sentences. Apply their specific documented framework — name their actual concepts. If this article genuinely falls outside their framework's domain, say that in one sentence rather than forcing a connection."
+    "analysis": "2-3 sentences applying their specific documented concept to this article.",
+    "source": "7 Powers (2016), ch. 5 — Counter-Positioning",
+    "confidence": "high"
   }}
 ]"""
 
@@ -91,7 +114,18 @@ Return a JSON array (no markdown, no other text):
             raw = raw.split("\n", 1)[1]
         if raw.endswith("```"):
             raw = raw.rsplit("```", 1)[0]
-        return json.loads(raw.strip())
+        analyses = json.loads(raw.strip())
+
+        grounded = [
+            a for a in analyses
+            if a.get("source")
+            and CONFIDENCE_RANK.get(a.get("confidence", "low"), 0) >= min_confidence
+        ]
+        dropped = len(analyses) - len(grounded)
+        if dropped:
+            print(f"    [lens] Dropped {dropped} below-threshold lens(es) for "
+                  f"'{article.get('title', '')[:40]}'")
+        return grounded[:max_per_item]
     except Exception as e:
         print(f"  [!] Expert analysis failed for '{article.get('title', '')[:50]}': {e}")
         return []

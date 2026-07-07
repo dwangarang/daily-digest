@@ -2,12 +2,14 @@ name: Daily Digest
 
 on:
   schedule:
-    # Runs hourly; scripts/check_schedule.py decides whether it's actually time
-    # to send, based on config.yaml's schedule.timezone + send_time. This is
-    # what makes the send time travel-proof — update schedule.timezone in
-    # config.yaml (via the CONFIG_YAML secret) when you change timezones,
+    # Fires twice hourly at off-peak minutes (GitHub throttles :00 heavily and
+    # delays/skips firings by hours). scripts/check_schedule.py decides whether
+    # it's actually time to send, based on config.yaml's schedule.timezone +
+    # send_time: the first firing at/after send_time sends, later ones no-op.
+    # This is what makes the send time travel-proof — update schedule.timezone
+    # in config.yaml (via the CONFIG_YAML secret) when you change timezones,
     # no workflow/cron edit needed.
-    - cron: '0 * * * *'
+    - cron: '7,37 * * * *'
   workflow_dispatch:
     inputs:
       force:
