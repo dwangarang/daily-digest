@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: write  # lets the keepalive step re-enable this workflow
 
 jobs:
   digest:
@@ -53,6 +54,16 @@ jobs:
       - name: Check schedule
         id: gate
         run: python scripts/check_schedule.py
+
+      # GitHub silently disables scheduled workflows after 60 days without
+      # repo activity (DB pushes go to the data repo, so they don't count).
+      # Re-enabling an already-enabled workflow is a no-op that resets that
+      # inactivity clock — so the schedule keeps itself alive.
+      - name: Keep scheduled workflow alive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/digest.yml/enable"
 
       - name: Run digest pipeline
         if: steps.gate.outputs.should_run == 'true' || github.event.inputs.force == 'true'
