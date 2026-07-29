@@ -27,7 +27,7 @@ A personal learning digest that curates, summarizes, and reinforces a stream of 
 ### Step 1: Clone and install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/daily-digest.git
+git clone https://github.com/dwangarang/daily-digest.git
 cd daily-digest
 python3 -m venv venv
 source venv/bin/activate
