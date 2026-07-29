@@ -20,9 +20,11 @@ A personal learning digest that curates, summarizes, and reinforces a stream of 
 
 ### Prerequisites
 
-- **Python 3.10+** — check with `python3 --version`
-- **An Anthropic API key** — get one at [console.anthropic.com](https://console.anthropic.com/settings/keys)
-- **A Gmail account for the bot** — create a new one (e.g., `mydigest.bot@gmail.com`)
+- **Python 3.10+** (check with `python3 --version`). Free.
+- **An Anthropic API key** from [console.anthropic.com](https://console.anthropic.com/settings/keys). **Paid.** You need a credit card on file before the first run. Expect a few cents to a few dollars a month depending on how many sources you add.
+- **A Gmail account for the bot.** Free. Create a new one (e.g. `mydigest.bot@gmail.com`) rather than using your personal address, and enable 2-Step Verification so you can generate an App Password in Step 2.
+
+Everything else is free. There is no hosted version and no signup: the digest runs from your own machine or a GitHub Action, on your own API key.
 
 ### Step 1: Clone and install
 
